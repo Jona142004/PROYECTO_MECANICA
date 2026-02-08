@@ -78,4 +78,5 @@ public class ClienteDialog extends JDialog {
         add(new JScrollPane(table), BorderLayout.CENTER);
         add(bottom, BorderLayout.SOUTH);
     }
+    
 }

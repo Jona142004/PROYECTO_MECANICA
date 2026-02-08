@@ -1,11 +1,14 @@
 package ui.clientes;
 
+import dao.ClienteDAO;
+import model.Cliente;
 import ui.components.UIMode;
 import ui.theme.UITheme;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.List;
 
 public class ClientesFrame extends JFrame {
 
@@ -33,6 +36,7 @@ public class ClientesFrame extends JFrame {
         add(content(), BorderLayout.CENTER);
 
         applyMode(mode);
+        cargarTabla();
     }
 
     public ClientesFrame() {
@@ -157,49 +161,118 @@ public class ClientesFrame extends JFrame {
         correo.setEditable(editable);
     }
 
-    private void onBuscar() {
-        if (mode != UIMode.EDIT && mode != UIMode.DELETE) return;
+private void onBuscar() {
+    // Solo buscamos si estamos en modo EDITAR o ELIMINAR
+    if (mode != UIMode.EDIT && mode != UIMode.DELETE) return;
 
-        // Mock: cargar datos
-        nombres.setText("Juan");
-        apellidos.setText("Pérez");
-        direccion.setText("Av. 12 de Abril");
-        telefono.setText("0999999999");
-        correo.setText("juan@mail.com");
-        estado.setSelectedItem("ACTIVO");
+    String ced = cedula.getText();
+    if (ced.isEmpty()) {
+        cargarTabla();
+        JOptionPane.showMessageDialog(this, "Ingrese una cédula para buscar.");
+        return;
+    }
 
-        // Bloquear clave después de encontrar
-        setKeyState(true, false);
+    ClienteDAO dao = new ClienteDAO();
+    Cliente c = dao.buscarPorCedula(ced);
 
-        // Habilitar resto
-        setFieldsEnabled(true);
+    if (c != null) {
+        // ¡Encontrado! Llenamos las cajas de texto
+        nombres.setText(c.getNombre());
+        apellidos.setText(c.getApellido());
+        direccion.setText(c.getDireccion());
+        telefono.setText(c.getTelefono());
+        correo.setText(c.getCorreo());
+        estado.setSelectedItem("ACTIVO"); // Tu DAO solo trae activos por ahora
+
+        // Lógica de la interfaz (bloquear cédula, habilitar resto)
+        setKeyState(true, false); // Cédula visible pero no editable
+        setFieldsEnabled(true);   // Habilitar campos
 
         if (mode == UIMode.EDIT) {
-            // ✅ editar: campos editables
             setFieldsEditable(true);
         } else {
-            // ✅ eliminar: campos solo lectura
+            // En modo eliminar, mostramos los datos pero no dejamos editar
             setFieldsEditable(false);
             estado.setEnabled(false);
         }
+    } else {
+        JOptionPane.showMessageDialog(this, "Cliente no encontrado o inactivo.");
+        // Opcional: limpiar campos si no encuentra nada
+        limpiarCampos();
+        cargarTabla(); // (Tendrías que crear este método auxiliar)
+    }
+}
+private void onGuardar() {
+    // 1. Recoger datos
+    String ced = cedula.getText();
+    String nom = nombres.getText();
+    String ape = apellidos.getText();
+    String dir = direccion.getText();
+    String tel = telefono.getText();
+    String cor = correo.getText();
 
-        JOptionPane.showMessageDialog(this,
-                "Cliente cargado. Ya puedes " + (mode == UIMode.EDIT ? "editar." : "eliminar/desactivar."));
+    // 2. Validar
+    if (ced.isEmpty() || nom.isEmpty() || ape.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Cédula, Nombres y Apellidos son obligatorios.");
+        return;
     }
 
-    private void onGuardar() {
-        if (mode == UIMode.ADD) {
-            JOptionPane.showMessageDialog(this, "Guardado (Añadir) - Solo UI");
-        } else if (mode == UIMode.EDIT) {
-            JOptionPane.showMessageDialog(this, "Guardado (Editar) - Solo UI");
+    // 3. Crear objeto Cliente
+    Cliente c = new Cliente();
+    c.setCedula(ced);
+    c.setNombre(nom);
+    c.setApellido(ape);
+    c.setDireccion(dir);
+    c.setTelefono(tel);
+    c.setCorreo(cor);
+    
+    // 4. Llamar al DAO
+    ClienteDAO dao = new ClienteDAO();
+    boolean exito = false;
+
+    if (mode == UIMode.ADD) {
+        exito = dao.registrar(c);
+    } else if (mode == UIMode.EDIT) {
+        exito = dao.actualizar(c);
+    }
+
+    // 5. Resultado
+    if (exito) {
+    JOptionPane.showMessageDialog(this, "Operación exitosa.");
+    limpiarCampos(); // <--- AQUÍ
+    
+    } else {
+        JOptionPane.showMessageDialog(this, "Error al guardar. Verifica los datos.");
+    }
+    cargarTabla();
+}
+
+ private void onEliminar() {
+    if (mode == UIMode.DELETE) {
+        String ced = cedula.getText();
+        if (ced.isEmpty()) return;
+
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "¿Seguro que deseas eliminar este cliente?", 
+            "Confirmar", 
+            JOptionPane.YES_NO_OPTION);
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            ClienteDAO dao = new ClienteDAO();
+            
+            // CORRECCIÓN: Llamamos al método eliminar y guardamos el resultado
+            boolean exito = dao.eliminar(ced); 
+
+            if (exito) {
+                JOptionPane.showMessageDialog(this, "Cliente eliminado correctamente.");
+                limpiarCampos(); 
+            } else {
+                JOptionPane.showMessageDialog(this, "Error al eliminar. Verifique la conexión.");
+            }
         }
     }
-
-    private void onEliminar() {
-        if (mode == UIMode.DELETE) {
-            JOptionPane.showMessageDialog(this, "Eliminado/Desactivado - Solo UI");
-        }
-    }
+    cargarTabla();
+}
 
     private JPanel header(String title, String subtitle) {
         JPanel top = new JPanel(new BorderLayout());
@@ -228,5 +301,38 @@ public class ClientesFrame extends JFrame {
         p.add(new JLabel(label), g);
         g.gridx = 1; g.weightx = 0.65;
         p.add(field, g);
+    }
+    private void limpiarCampos() {
+        cedula.setText("");
+        nombres.setText("");
+        apellidos.setText("");
+        direccion.setText("");
+        telefono.setText("");
+        correo.setText("");
+        estado.setSelectedItem("ACTIVO"); // O setSelectedIndex(0);
+        
+        // Opcional: Poner el cursor de nuevo en la cédula para seguir escribiendo
+        cedula.requestFocus(); 
+    }
+    private void cargarTabla() {
+        // 1. Limpiar la tabla actual
+        model.setRowCount(0);
+        
+        // 2. Pedir datos al DAO
+        ClienteDAO dao = new ClienteDAO();
+        List<Cliente> lista = dao.listarActivos();
+        
+        // 3. Llenar la tabla fila por fila
+        for (Cliente c : lista) {
+            model.addRow(new Object[]{
+                c.getId(),
+                c.getCedula(),
+                c.getNombre(),
+                c.getApellido(),
+                c.getTelefono(),
+                c.getCorreo(),
+                c.getEstado()
+            });
+        }
     }
 }
