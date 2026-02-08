@@ -6,6 +6,7 @@ import ui.components.AccordionSection;
 import ui.components.UIMode;
 import ui.empleados.EmpleadosFrame;
 import ui.facturacion.FacturacionFrame;
+import ui.login.LoginFrame;
 import ui.servicios.ServiciosFrame;
 import ui.theme.UITheme;
 import ui.usuarios.UsuariosFrame;
@@ -19,10 +20,31 @@ public class MainFrame extends JFrame {
     private JPanel sidebar;
     private AccordionSection secEmpleados;
     private AccordionSection secUsuarios;
-
-
+    private AccordionSection secClientes;
+    private AccordionSection secVehiculos;
+    private AccordionSection secFact;
+    private AccordionSection secServicios;
+    private AccordionSection secCitas;
     private JFrame ventanaActiva = null;
     private AccordionSection expandedSection = null;
+
+    private String permisoSesion;
+
+    public MainFrame(String permisoSesion) {
+        this.permisoSesion = permisoSesion;
+
+        setTitle("Autos y Motores - Panel Principal");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(1200, 720);
+        setLocationRelativeTo(null);
+        setLayout(new BorderLayout());
+
+        add(buildTopBar(), BorderLayout.NORTH);
+        add(buildSidebar(), BorderLayout.WEST);
+        add(buildDashboard(), BorderLayout.CENTER);
+
+        applyRoleUI(this.permisoSesion);
+    }
 
     public MainFrame() {
         setTitle("Autos y Motores - Panel Principal");
@@ -51,14 +73,12 @@ public class MainFrame extends JFrame {
         right.setOpaque(false);
 
         JButton logout = UITheme.primaryButton("Cerrar sesión");
+
         logout.addActionListener(e -> {
-            // SOLO UI: cierre visual
-            dispose();
-            JOptionPane.showMessageDialog(null, "Sesión cerrada.");
-            System.exit(0);
+            dispose(); // cierra MainFrame
+            SwingUtilities.invokeLater(() -> new LoginFrame().setVisible(true));
         });
 
-        right.add(new JLabel("Rol:"));
         right.add(logout);
 
         top.add(title, BorderLayout.WEST);
@@ -83,30 +103,30 @@ public class MainFrame extends JFrame {
         sidebar.add(Box.createVerticalStrut(10));
 
         // ===== SECCIONES (ACORDEÓN) =====
-        AccordionSection secClientes = new AccordionSection("Clientes");
+        secClientes = new AccordionSection("Clientes");
         secClientes.setAlignmentX(Component.LEFT_ALIGNMENT);
         secClientes.addItem("Añadir", () -> abrirVentana(new ClientesFrame(UIMode.ADD)));
         secClientes.addItem("Editar", () -> abrirVentana(new ClientesFrame(UIMode.EDIT)));
         secClientes.addItem("Eliminar", () -> abrirVentana(new ClientesFrame(UIMode.DELETE)));
 
-        AccordionSection secVehiculos = new AccordionSection("Vehículos");
+        secVehiculos = new AccordionSection("Vehículos");
         secVehiculos.setAlignmentX(Component.LEFT_ALIGNMENT);
         secVehiculos.addItem("Añadir", () -> abrirVentana(new VehiculosFrame(UIMode.ADD)));
         secVehiculos.addItem("Editar", () -> abrirVentana(new VehiculosFrame(UIMode.EDIT)));
         secVehiculos.addItem("Eliminar", () -> abrirVentana(new VehiculosFrame(UIMode.DELETE)));
 
-        AccordionSection secCitas = new AccordionSection("Citas");
+        secCitas = new AccordionSection("Citas");
         secCitas.setAlignmentX(Component.LEFT_ALIGNMENT);
         secCitas.addItem("Agendar", () -> abrirVentana(new CitasFrame(UIMode.ADD)));
         secCitas.addItem("Cancelar/Eliminar", () -> abrirVentana(new CitasFrame(UIMode.DELETE)));
 
-        AccordionSection secServicios = new AccordionSection("Servicios");
+        secServicios = new AccordionSection("Servicios");
         secServicios.setAlignmentX(Component.LEFT_ALIGNMENT);
         secServicios.addItem("Añadir", () -> abrirVentana(new ServiciosFrame(UIMode.ADD)));
         secServicios.addItem("Editar", () -> abrirVentana(new ServiciosFrame(UIMode.EDIT)));
         secServicios.addItem("Eliminar", () -> abrirVentana(new ServiciosFrame(UIMode.DELETE)));
 
-        AccordionSection secFact = new AccordionSection("Facturación");
+        secFact = new AccordionSection("Facturación");
         secFact.setAlignmentX(Component.LEFT_ALIGNMENT);
         secFact.addItem("Crear factura", () -> abrirVentana(new FacturacionFrame()));
         secFact.addItem("Buscar factura", () -> abrirVentana(new FacturacionFrame()));
@@ -218,18 +238,32 @@ public class MainFrame extends JFrame {
         return c;
     }
 
-    private void applyRoleUI(String role) {
-        boolean isAdmin = "Administrador".equals(role);
+    private void applyRoleUI(String permiso) {
 
+        boolean isAdmin = "A".equalsIgnoreCase(permiso); // A=Admin, E=Empleado recepción
+
+        // Admin extra:
         if (secUsuarios != null) secUsuarios.setVisible(isAdmin);
         if (secEmpleados != null) secEmpleados.setVisible(isAdmin);
 
-        // Si justo estaba abierta una sección que ocultas, ciérrala
-        if (!isAdmin && expandedSection != null) {
-            if (expandedSection == secUsuarios || expandedSection == secEmpleados) {
-                expandedSection.setExpanded(false);
-                expandedSection = null;
-            }
+        // Empleado recepción: SOLO facturar, clientes, vehículos
+        if (!isAdmin) {
+            if (secServicios != null) secServicios.setVisible(false);
+            if (secCitas != null) secCitas.setVisible(false);
+
+            // opcional: si NO quieres que un empleado pueda editar/eliminar vehículos:
+            // (esto depende de tu requerimiento; tú dijiste registrar vehículos, no editar/eliminar)
+            // secVehiculos -> dejar visible pero sin acciones extra (ver nota abajo)
+        } else {
+            // Admin ve todo
+            if (secServicios != null) secServicios.setVisible(true);
+            if (secCitas != null) secCitas.setVisible(true);
+        }
+
+        // Si estaba abierta una sección que se oculta, ciérrala
+        if (expandedSection != null && !expandedSection.isVisible()) {
+            expandedSection.setExpanded(false);
+            expandedSection = null;
         }
 
         sidebar.revalidate();
