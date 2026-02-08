@@ -1,5 +1,8 @@
 package ui.vehiculos;
 
+import dao.VehiculoDAO;
+import dao.VehiculoDAO.OpcionCombo;
+import model.Vehiculo;
 import ui.clientes.ClienteDialog;
 import ui.components.SelectorPanel;
 import ui.components.UIMode;
@@ -8,43 +11,75 @@ import ui.theme.UITheme;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.List;
 
 public class VehiculosFrame extends JFrame {
 
     private UIMode mode;
 
-    // ===== Campos =====
+    // Campos
     private JTextField placa;
     private SelectorPanel cliente;
-    private JComboBox<String> marca;
-    private JComboBox<String> modelo;
+    private JComboBox<OpcionCombo> marca;
+    private JComboBox<OpcionCombo> modelo;
 
-    // ===== Tabla =====
+    // Tabla
     private JTable table;
     private DefaultTableModel model;
 
-    // ===== Botones =====
-    private JButton btnBuscar;   // solo EDIT/DELETE
-    private JButton btnGuardar;  // ADD/EDIT
-    private JButton btnEliminar; // DELETE
+    // Botones
+    private JButton btnBuscar, btnGuardar, btnEliminar;
+    
+    // IDs para control
+    private int idClienteSeleccionado = -1;
+    private int idVehiculoSeleccionado = -1; // NUEVO: Para saber cuál editar/borrar
 
     public VehiculosFrame(UIMode mode) {
         this.mode = mode;
-
         setTitle("Vehículos - Autos y Motores");
         setSize(1120, 650);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        add(header("Gestión de Vehículos", "Registro por cliente, marca y modelo (solo UI)"), BorderLayout.NORTH);
+        add(header("Gestión de Vehículos", "Registro por cliente, marca y modelo"), BorderLayout.NORTH);
         add(content(), BorderLayout.CENTER);
 
         applyMode(mode);
+        
+        cargarCombos();
+        cargarTabla();
     }
 
     public VehiculosFrame() {
         this(UIMode.ADD);
     }
+
+    // --- CARGA DE DATOS ---
+
+    private void cargarCombos() {
+        marca.removeAllItems();
+        modelo.removeAllItems();
+        VehiculoDAO dao = new VehiculoDAO();
+        for (OpcionCombo item : dao.obtenerMarcas()) marca.addItem(item);
+        for (OpcionCombo item : dao.obtenerModelos()) modelo.addItem(item);
+    }
+
+    private void cargarTabla() {
+        model.setRowCount(0);
+        VehiculoDAO dao = new VehiculoDAO();
+        List<Vehiculo> lista = dao.listar();
+        for (Vehiculo v : lista) {
+            model.addRow(new Object[]{
+                v.getId(),
+                v.getPlaca(),
+                v.getNombreCliente(),
+                v.getNombreMarca(),
+                v.getNombreModelo()
+            });
+        }
+    }
+
+    // --- UI ---
 
     private JPanel content() {
         JPanel root = new JPanel(new BorderLayout());
@@ -57,47 +92,62 @@ public class VehiculosFrame extends JFrame {
         g.insets = new Insets(6, 6, 6, 6);
         g.fill = GridBagConstraints.HORIZONTAL;
 
-        // Campos
         placa = new JTextField();
         cliente = new SelectorPanel("(Seleccionar cliente)");
-        marca = new JComboBox<>(new String[]{"(Seleccionar marca)"});
-        modelo = new JComboBox<>(new String[]{"(Seleccionar modelo)"});
+        marca = new JComboBox<>();
+        modelo = new JComboBox<>();
 
         cliente.setOnSearch(() -> {
-            ClienteDialog dialog = new ClienteDialog(this, cliente::setText);
+            ClienteDialog dialog = new ClienteDialog(this, (texto) -> {
+                cliente.setText(texto);
+                try {
+                    String[] partes = texto.split(" - ");
+                    if (partes.length > 0) {
+                        idClienteSeleccionado = Integer.parseInt(partes[0]);
+                    }
+                } catch (Exception e) {
+                    idClienteSeleccionado = -1;
+                }
+            });
             dialog.setVisible(true);
         });
 
         int r = 0;
-        addField(form, g, r++, "Placa", placa);          // ✅ clave para buscar
+        addField(form, g, r++, "Placa", placa);
         addField(form, g, r++, "Cliente", cliente);
         addField(form, g, r++, "Marca", marca);
         addField(form, g, r++, "Modelo", modelo);
 
-        // Acciones
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         actions.setOpaque(false);
+        btnBuscar = UITheme.primaryButton("Buscar");
+        btnGuardar = UITheme.primaryButton("Guardar");
+        btnEliminar = UITheme.primaryButton("Eliminar");
+        actions.add(btnBuscar); actions.add(btnGuardar); actions.add(btnEliminar);
 
-        btnBuscar = UITheme.primaryButton("Buscar");     // EDIT/DELETE
-        btnGuardar = UITheme.primaryButton("Guardar");   // ADD/EDIT
-        btnEliminar = UITheme.primaryButton("Eliminar"); // DELETE
-
-        actions.add(btnBuscar);
-        actions.add(btnGuardar);
-        actions.add(btnEliminar);
-
-        g.gridx = 0;
-        g.gridy = r;
-        g.gridwidth = 2;
+        g.gridx = 0; g.gridy = r; g.gridwidth = 2;
         form.add(actions, g);
 
         // Tabla
         JPanel tableCard = UITheme.cardPanel();
         tableCard.setLayout(new BorderLayout());
         String[] cols = {"ID", "Placa", "Cliente", "Marca", "Modelo"};
-        model = new DefaultTableModel(cols, 0);
+        
+        model = new DefaultTableModel(cols, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) { return false; }
+        };
+        
         table = new JTable(model);
         table.setRowHeight(26);
+        
+        // Evento Selección
+        table.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting() && table.getSelectedRow() != -1) {
+                cargarDatosDeFilaSeleccionada();
+            }
+        });
+
         tableCard.add(new JScrollPane(table), BorderLayout.CENTER);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, form, tableCard);
@@ -106,7 +156,6 @@ public class VehiculosFrame extends JFrame {
 
         root.add(split, BorderLayout.CENTER);
 
-        // Eventos
         btnBuscar.addActionListener(e -> onBuscar());
         btnGuardar.addActionListener(e -> onGuardar());
         btnEliminar.addActionListener(e -> onEliminar());
@@ -114,111 +163,172 @@ public class VehiculosFrame extends JFrame {
         return root;
     }
 
-    // ===================== MODOS (IGUAL QUE CLIENTES, adaptado a PLACA) =====================
+    // --- LÓGICA DE SELECCIÓN Y BÚSQUEDA ---
+    
+    private void cargarDatosDeFilaSeleccionada() {
+        int row = table.getSelectedRow();
+        if (row == -1) return;
+
+        // 1. CAPTURAR ID DEL VEHÍCULO SELECCIONADO
+        idVehiculoSeleccionado = Integer.parseInt(table.getValueAt(row, 0).toString());
+        String placaVal = table.getValueAt(row, 1).toString();
+        
+        VehiculoDAO dao = new VehiculoDAO();
+        Vehiculo v = dao.buscarPorPlaca(placaVal);
+        
+        if (v != null) {
+            placa.setText(v.getPlaca());
+            cliente.setText(v.getIdCliente() + " - " + v.getNombreCliente()); // Mostramos ID para consistencia
+            idClienteSeleccionado = v.getIdCliente();
+            
+            // Seleccionar Combos
+            seleccionarEnCombo(marca, v.getIdMarca());
+            seleccionarEnCombo(modelo, v.getIdModelo());
+            
+            if (mode == UIMode.EDIT) setFieldsEditable(true);
+        }
+    }
+    
+    private void seleccionarEnCombo(JComboBox<OpcionCombo> combo, int id) {
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            if (combo.getItemAt(i).getId() == id) {
+                combo.setSelectedIndex(i);
+                break;
+            }
+        }
+    }
+
+    private void onBuscar() {
+        String texto = placa.getText().trim();
+        if (texto.isEmpty()) {
+            cargarTabla();
+            return;
+        }
+        VehiculoDAO dao = new VehiculoDAO();
+        Vehiculo v = dao.buscarPorPlaca(texto);
+
+        if (v != null) {
+            model.setRowCount(0);
+            model.addRow(new Object[]{v.getId(), v.getPlaca(), v.getNombreCliente(), v.getNombreMarca(), v.getNombreModelo()});
+            table.setRowSelectionInterval(0, 0); // Esto disparará cargarDatosDeFilaSeleccionada
+        } else {
+            JOptionPane.showMessageDialog(this, "No encontrado");
+            cargarTabla();
+        }
+    }
+
+    // --- ACCIONES PRINCIPALES CORREGIDAS ---
+
+    private void onGuardar() {
+        // Validaciones
+        if (placa.getText().isEmpty() || marca.getSelectedItem() == null || modelo.getSelectedItem() == null) {
+            JOptionPane.showMessageDialog(this, "Complete todos los campos.");
+            return;
+        }
+        if (idClienteSeleccionado == -1) {
+            JOptionPane.showMessageDialog(this, "Seleccione un cliente válido.");
+            return;
+        }
+
+        OpcionCombo m = (OpcionCombo) marca.getSelectedItem();
+        OpcionCombo mo = (OpcionCombo) modelo.getSelectedItem();
+        
+        Vehiculo v = new Vehiculo();
+        v.setPlaca(placa.getText());
+        v.setIdMarca(m.getId());
+        v.setIdModelo(mo.getId());
+        v.setIdCliente(idClienteSeleccionado);
+        
+        VehiculoDAO dao = new VehiculoDAO();
+        boolean exito = false;
+
+        // LÓGICA DE ACTUALIZAR VS GUARDAR
+        if (mode == UIMode.EDIT) {
+            if (idVehiculoSeleccionado == -1) {
+                JOptionPane.showMessageDialog(this, "Seleccione un vehículo de la tabla para editar.");
+                return;
+            }
+            v.setId(idVehiculoSeleccionado); // Pasamos el ID para el WHERE del SQL
+            exito = dao.actualizar(v);
+        } else {
+            // MODO AGREGAR
+            exito = dao.registrar(v);
+        }
+        
+        if (exito) {
+            JOptionPane.showMessageDialog(this, "Operación exitosa.");
+            cargarTabla();
+            limpiarCampos();
+        } else {
+            JOptionPane.showMessageDialog(this, "Error al guardar (Verifica duplicados o conexión).");
+        }
+    }
+    
+    private void onEliminar() {
+        if (idVehiculoSeleccionado == -1) {
+            JOptionPane.showMessageDialog(this, "Seleccione un vehículo de la tabla para eliminar.");
+            return;
+        }
+        
+        int confirm = JOptionPane.showConfirmDialog(this, "¿Eliminar vehículo seleccionado?", "Confirmar", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            VehiculoDAO dao = new VehiculoDAO();
+            if (dao.eliminar(idVehiculoSeleccionado)) {
+                JOptionPane.showMessageDialog(this, "Vehículo eliminado.");
+                cargarTabla();
+                limpiarCampos();
+            } else {
+                JOptionPane.showMessageDialog(this, "Error al eliminar (Puede tener citas asociadas).");
+            }
+        }
+    }
+    
+    private void limpiarCampos() {
+        placa.setText("");
+        cliente.setText("(Seleccionar cliente)");
+        idClienteSeleccionado = -1;
+        idVehiculoSeleccionado = -1;
+        if (marca.getItemCount() > 0) marca.setSelectedIndex(0);
+        if (modelo.getItemCount() > 0) modelo.setSelectedIndex(0);
+    }
+
+    // --- HELPERS UI ---
 
     private void applyMode(UIMode m) {
         this.mode = m;
-
-        // Botones visibles
-        btnBuscar.setVisible(m == UIMode.EDIT || m == UIMode.DELETE);
-        btnGuardar.setVisible(m == UIMode.ADD || m == UIMode.EDIT);
+        btnBuscar.setVisible(m != UIMode.ADD);
+        btnGuardar.setVisible(m != UIMode.DELETE);
         btnEliminar.setVisible(m == UIMode.DELETE);
-
-        if (m == UIMode.ADD) {
-            btnGuardar.setText("Agregar");
-            setKeyState(true, true);   // placa editable
-            setFieldsEnabled(true);    // resto habilitado
-        }
-
-        if (m == UIMode.EDIT) {
-            btnGuardar.setText("Guardar");
-            setKeyState(true, true);   // ✅ solo placa editable
-            setFieldsEnabled(false);   // 🔒 resto deshabilitado hasta buscar
-        }
-
-        if (m == UIMode.DELETE) {
-            setKeyState(true, true);   // ✅ solo placa editable
-            setFieldsEnabled(false);   // 🔒 resto deshabilitado hasta buscar
-        }
-
-        revalidate();
-        repaint();
-    }
-
-    private void setKeyState(boolean enabled, boolean editable) {
-        placa.setEnabled(enabled);
-        placa.setEditable(editable);
-    }
-
-    private void setFieldsEnabled(boolean enabled) {
-        cliente.setEnabled(enabled);
-        marca.setEnabled(enabled);
-        modelo.setEnabled(enabled);
-    }
-
-    // ===================== ACCIONES (UI MOCK) =====================
-
-    private void onBuscar() {
-        if (mode != UIMode.EDIT && mode != UIMode.DELETE) return;
-
-        // Mock: simula que encontró el vehículo por PLACA
-        cliente.setText("Juan Pérez - 0102030405");
-        marca.setModel(new DefaultComboBoxModel<>(new String[]{"Chevrolet", "Toyota", "Kia"}));
-        modelo.setModel(new DefaultComboBoxModel<>(new String[]{"Silverado", "Hilux", "Rio"}));
-        marca.setSelectedItem("Chevrolet");
-        modelo.setSelectedItem("Silverado");
-
-        // Bloquear placa
-        setKeyState(true, false);
-
-        // Habilitar campos para mostrar
-        setFieldsEnabled(true);
-
-        if (mode == UIMode.DELETE) {
-            // En eliminar: solo ver, no modificar
-            cliente.setEnabled(false);
-            marca.setEnabled(false);
-            modelo.setEnabled(false);
-        }
-
-        JOptionPane.showMessageDialog(this,
-                "Vehículo cargado. Ya puedes " + (mode == UIMode.EDIT ? "editar." : "eliminar."));
-    }
-
-    private void onGuardar() {
-        if (mode == UIMode.ADD) {
-            JOptionPane.showMessageDialog(this, "Guardado (Añadir vehículo) - Solo UI");
-        } else if (mode == UIMode.EDIT) {
-            JOptionPane.showMessageDialog(this, "Guardado (Editar vehículo) - Solo UI");
+        
+        if(m == UIMode.ADD) {
+            placa.setEditable(true);
+            setFieldsEnabled(true);
+        } else {
+            placa.setEditable(true);
+            setFieldsEnabled(false);
         }
     }
-
-    private void onEliminar() {
-        if (mode == UIMode.DELETE) {
-            JOptionPane.showMessageDialog(this, "Eliminado/Desactivado (Vehículo) - Solo UI");
-        }
+    
+    private void setFieldsEnabled(boolean b) {
+        cliente.setEnabled(b);
+        marca.setEnabled(b);
+        modelo.setEnabled(b);
     }
-
-    // ===================== UI HELPERS =====================
+    
+    private void setFieldsEditable(boolean b) {
+        marca.setEnabled(b);
+        modelo.setEnabled(b);
+    }
 
     private JPanel header(String title, String subtitle) {
         JPanel top = new JPanel(new BorderLayout());
         top.setBackground(Color.WHITE);
         top.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER));
         top.setPreferredSize(new Dimension(0, 64));
-
-        JLabel t = new JLabel("  " + title);
-        t.setFont(new Font("SansSerif", Font.BOLD, 16));
-
-        JLabel s = new JLabel("  " + subtitle);
-        s.setForeground(UITheme.MUTED);
-
-        JPanel text = new JPanel();
-        text.setOpaque(false);
-        text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
-        text.add(t);
-        text.add(s);
-
+        JLabel t = new JLabel("  " + title); t.setFont(new Font("SansSerif", Font.BOLD, 16));
+        JLabel s = new JLabel("  " + subtitle); s.setForeground(UITheme.MUTED);
+        JPanel text = new JPanel(); text.setOpaque(false); text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
+        text.add(t); text.add(s);
         top.add(text, BorderLayout.WEST);
         return top;
     }

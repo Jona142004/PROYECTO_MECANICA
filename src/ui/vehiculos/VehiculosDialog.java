@@ -26,10 +26,6 @@ public class VehiculosDialog extends JDialog {
         String[] cols = {"Codigo", "Placa", "Cliente", "Marca", "Modelo"};
         DefaultTableModel model = new DefaultTableModel(cols, 0);
 
-        // 👉 Datos mock (solo UI)
-        model.addRow(new Object[]{"1", "0102030405", "Juan Pérez", "0999999999"});
-        model.addRow(new Object[]{"2", "0101112223", "María López", "0988888888"});
-
         JTable table = new JTable(model);
         table.setRowHeight(26);
 
