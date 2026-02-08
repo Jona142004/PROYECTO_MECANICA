@@ -124,4 +124,38 @@ public class ClienteDAO {
         }
         return lista;
     }
+    // 6. BUSCAR INTELIGENTE (Por Cédula, Nombre o Apellido)
+    public List<Cliente> buscarPorFiltro(String texto) {
+        List<Cliente> lista = new ArrayList<>();
+        String sql = "SELECT * FROM AUT_CLIENTES WHERE cli_estado = 'A' " +
+                     "AND (cli_cedula LIKE ? OR UPPER(cli_nombre) LIKE ? OR UPPER(cli_apellido) LIKE ?) " +
+                     "ORDER BY cli_apellido";
+        
+        try (Connection con = Conexion.getConexion();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            
+            String pattern = "%" + texto.toUpperCase() + "%";
+            ps.setString(1, pattern); // Busca en Cédula
+            ps.setString(2, pattern); // Busca en Nombre
+            ps.setString(3, pattern); // Busca en Apellido
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Cliente c = new Cliente();
+                    c.setId(rs.getInt("cli_id"));
+                    c.setCedula(rs.getString("cli_cedula"));
+                    c.setNombre(rs.getString("cli_nombre"));
+                    c.setApellido(rs.getString("cli_apellido"));
+                    c.setDireccion(rs.getString("cli_direccion"));
+                    c.setTelefono(rs.getString("cli_telefono"));
+                    c.setCorreo(rs.getString("cli_correo"));
+                    c.setEstado(rs.getString("cli_estado"));
+                    lista.add(c);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error al buscar filtro: " + e.getMessage());
+        }
+        return lista;
+    }
 }
