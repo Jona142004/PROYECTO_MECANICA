@@ -25,13 +25,21 @@ public class MainFrame extends JFrame {
     private AccordionSection secFact;
     private AccordionSection secServicios;
     private AccordionSection secCitas;
+
+    private JButton btnCliEliminar;
+    private JButton btnVehEditar;
+    private JButton btnVehEliminar;
+    private JButton btnFacBuscar;
+    private JButton btnFacAnular;
+
+
     private JFrame ventanaActiva = null;
     private AccordionSection expandedSection = null;
 
     private String permisoSesion;
 
-    public MainFrame(String permisoSesion) {
-        this.permisoSesion = permisoSesion;
+    public MainFrame(String permiso) {
+        this.permisoSesion = permiso;
 
         setTitle("Autos y Motores - Panel Principal");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -43,21 +51,7 @@ public class MainFrame extends JFrame {
         add(buildSidebar(), BorderLayout.WEST);
         add(buildDashboard(), BorderLayout.CENTER);
 
-        applyRoleUI(this.permisoSesion);
-    }
-
-    public MainFrame() {
-        setTitle("Autos y Motores - Panel Principal");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1200, 720);
-        setLocationRelativeTo(null);
-        setLayout(new BorderLayout());
-
-        add(buildTopBar(), BorderLayout.NORTH);
-        add(buildSidebar(), BorderLayout.WEST);
-        add(buildDashboard(), BorderLayout.CENTER);
-
-        applyRoleUI("Administrador");
+        applyRoleUI(permisoSesion);
     }
 
     private JPanel buildTopBar() {
@@ -90,7 +84,7 @@ public class MainFrame extends JFrame {
     private JPanel buildSidebar() {
         sidebar = new JPanel();
         sidebar.setPreferredSize(new Dimension(260, 0));
-        sidebar.setBackground(UITheme.BG); 
+        sidebar.setBackground(UITheme.BG);
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
         sidebar.setBorder(BorderFactory.createEmptyBorder(14, 12, 14, 12));
 
@@ -103,34 +97,40 @@ public class MainFrame extends JFrame {
         sidebar.add(Box.createVerticalStrut(10));
 
         // ===== SECCIONES (ACORDEÓN) =====
+
+        // CLIENTES (E: Añadir + Editar | A: + Eliminar)
         secClientes = new AccordionSection("Clientes");
         secClientes.setAlignmentX(Component.LEFT_ALIGNMENT);
         secClientes.addItem("Añadir", () -> abrirVentana(new ClientesFrame(UIMode.ADD)));
         secClientes.addItem("Editar", () -> abrirVentana(new ClientesFrame(UIMode.EDIT)));
-        secClientes.addItem("Eliminar", () -> abrirVentana(new ClientesFrame(UIMode.DELETE)));
+        btnCliEliminar = secClientes.addItem("Eliminar", () -> abrirVentana(new ClientesFrame(UIMode.DELETE)));
 
+        // VEHÍCULOS (E: solo Añadir | A: + Editar/Eliminar)
         secVehiculos = new AccordionSection("Vehículos");
         secVehiculos.setAlignmentX(Component.LEFT_ALIGNMENT);
         secVehiculos.addItem("Añadir", () -> abrirVentana(new VehiculosFrame(UIMode.ADD)));
-        secVehiculos.addItem("Editar", () -> abrirVentana(new VehiculosFrame(UIMode.EDIT)));
-        secVehiculos.addItem("Eliminar", () -> abrirVentana(new VehiculosFrame(UIMode.DELETE)));
+        btnVehEditar = secVehiculos.addItem("Editar", () -> abrirVentana(new VehiculosFrame(UIMode.EDIT)));
+        btnVehEliminar = secVehiculos.addItem("Eliminar", () -> abrirVentana(new VehiculosFrame(UIMode.DELETE)));
 
+        // CITAS (solo Admin según tu regla)
         secCitas = new AccordionSection("Citas");
         secCitas.setAlignmentX(Component.LEFT_ALIGNMENT);
         secCitas.addItem("Agendar", () -> abrirVentana(new CitasFrame(UIMode.ADD)));
         secCitas.addItem("Cancelar/Eliminar", () -> abrirVentana(new CitasFrame(UIMode.DELETE)));
 
+        // SERVICIOS (solo Admin según tu regla)
         secServicios = new AccordionSection("Servicios");
         secServicios.setAlignmentX(Component.LEFT_ALIGNMENT);
         secServicios.addItem("Añadir", () -> abrirVentana(new ServiciosFrame(UIMode.ADD)));
         secServicios.addItem("Editar", () -> abrirVentana(new ServiciosFrame(UIMode.EDIT)));
         secServicios.addItem("Eliminar", () -> abrirVentana(new ServiciosFrame(UIMode.DELETE)));
 
+        // FACTURACIÓN (E: solo Crear | A: + Buscar/Anular)
         secFact = new AccordionSection("Facturación");
         secFact.setAlignmentX(Component.LEFT_ALIGNMENT);
         secFact.addItem("Crear factura", () -> abrirVentana(new FacturacionFrame()));
-        secFact.addItem("Buscar factura", () -> abrirVentana(new FacturacionFrame()));
-        secFact.addItem("Anular factura", () -> abrirVentana(new FacturacionFrame()));
+        btnFacBuscar = secFact.addItem("Buscar factura", () -> abrirVentana(new FacturacionFrame()));
+        btnFacAnular = secFact.addItem("Anular factura", () -> abrirVentana(new FacturacionFrame()));
 
         sidebar.add(secClientes);
         sidebar.add(secVehiculos);
@@ -142,11 +142,13 @@ public class MainFrame extends JFrame {
         sidebar.add(new JSeparator());
         sidebar.add(Box.createVerticalStrut(10));
 
+        // EMPLEADOS (solo Admin)
         secEmpleados = new AccordionSection("Empleados");
         secEmpleados.setAlignmentX(Component.LEFT_ALIGNMENT);
         secEmpleados.addItem("Añadir", () -> abrirVentana(new EmpleadosFrame(UIMode.ADD)));
         secEmpleados.addItem("Editar", () -> abrirVentana(new EmpleadosFrame(UIMode.EDIT)));
 
+        // USUARIOS (solo Admin)
         secUsuarios = new AccordionSection("Usuarios");
         secUsuarios.setAlignmentX(Component.LEFT_ALIGNMENT);
         secUsuarios.addItem("Añadir", () -> abrirVentana(new UsuariosFrame(UIMode.ADD)));
@@ -239,26 +241,26 @@ public class MainFrame extends JFrame {
     }
 
     private void applyRoleUI(String permiso) {
+        boolean isAdmin = "A".equalsIgnoreCase(permiso);
 
-        boolean isAdmin = "A".equalsIgnoreCase(permiso); // A=Admin, E=Empleado recepción
-
-        // Admin extra:
+        // Secciones completas solo admin
         if (secUsuarios != null) secUsuarios.setVisible(isAdmin);
         if (secEmpleados != null) secEmpleados.setVisible(isAdmin);
 
-        // Empleado recepción: SOLO facturar, clientes, vehículos
-        if (!isAdmin) {
-            if (secServicios != null) secServicios.setVisible(false);
-            if (secCitas != null) secCitas.setVisible(false);
+        if (secServicios != null) secServicios.setVisible(isAdmin);
+        if (secCitas != null) secCitas.setVisible(isAdmin);
 
-            // opcional: si NO quieres que un empleado pueda editar/eliminar vehículos:
-            // (esto depende de tu requerimiento; tú dijiste registrar vehículos, no editar/eliminar)
-            // secVehiculos -> dejar visible pero sin acciones extra (ver nota abajo)
-        } else {
-            // Admin ve todo
-            if (secServicios != null) secServicios.setVisible(true);
-            if (secCitas != null) secCitas.setVisible(true);
-        }
+        // ===== RESTRICCIÓN DE ITEMS (Empleado E) =====
+        // Clientes: no puede eliminar
+        if (btnCliEliminar != null) btnCliEliminar.setVisible(isAdmin);
+
+        // Vehículos: empleado NO puede editar/eliminar
+        if (btnVehEditar != null) btnVehEditar.setVisible(isAdmin);
+        if (btnVehEliminar != null) btnVehEliminar.setVisible(isAdmin);
+
+        // Facturación: empleado NO puede buscar/anular
+        if (btnFacBuscar != null) btnFacBuscar.setVisible(isAdmin);
+        if (btnFacAnular != null) btnFacAnular.setVisible(isAdmin);
 
         // Si estaba abierta una sección que se oculta, ciérrala
         if (expandedSection != null && !expandedSection.isVisible()) {
@@ -269,7 +271,6 @@ public class MainFrame extends JFrame {
         sidebar.revalidate();
         sidebar.repaint();
     }
-
 
     private void abrirVentana(JFrame nuevaVentana) {
         if (ventanaActiva != null) {

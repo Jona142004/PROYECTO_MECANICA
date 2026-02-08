@@ -46,26 +46,25 @@ public class AccordionSection extends JPanel {
         return headerButton;
     }
 
-    public void addItem(String text, Runnable onClick) {
+    public JButton addItem(String text, Runnable onClick) {
         JButton item = new JButton(text);
 
         item.setFocusPainted(false);
         item.setBorderPainted(false);
         item.setContentAreaFilled(false);
         item.setOpaque(false);
-        item.setIcon(null);                         // 🔴 elimina cuadrados
-        item.setForeground(Color.WHITE);            // ✅ texto blanco
+        item.setIcon(null);
+        item.setForeground(Color.WHITE);
         item.setFont(new Font("SansSerif", Font.PLAIN, 13));
         item.setHorizontalAlignment(SwingConstants.LEFT);
         item.setCursor(new Cursor(Cursor.HAND_CURSOR));
         item.setMargin(new Insets(0, 0, 0, 0));
-        item.setBorder(
-                BorderFactory.createEmptyBorder(4, 8, 4, 8) // 🔹 compacto
-        );
+        item.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
 
         item.addActionListener(e -> onClick.run());
-
         itemsPanel.add(item);
+
+        return item; 
     }
 
     public void setExpanded(boolean value) {
