@@ -160,7 +160,7 @@ public class FacturacionFrame extends JFrame {
         d.gridx = 4; d.weightx = 0.26;
         topCompacto.add(panelBtns, d);
 
-        // ---------- TABLA (que ocupe TODO) ----------
+
         String[] cols = {"Código", "Servicio", "Cantidad", "Precio Unit.", "Subtotal", "IVA", "Total"};
         model = new DefaultTableModel(cols, 0) {
             @Override

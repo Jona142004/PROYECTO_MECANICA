@@ -1,4 +1,5 @@
 package ui.login;
+import dao.UsuarioDAO;
 
 import ui.menu.MainFrame;
 import ui.theme.UITheme;
@@ -134,10 +135,37 @@ public class LoginFrame extends JFrame {
         btnExit.setPreferredSize(btnSize);
         btnExit.setMaximumSize(btnSize);
 
-        btnLogin.addActionListener(e -> {
-            new MainFrame().setVisible(true);
-            dispose();
-        });
+
+
+btnLogin.addActionListener(e -> {
+    String u = txtUser.getText();
+    String p = new String(txtPass.getPassword());
+
+    if (u.isEmpty() || p.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Ingrese credenciales");
+        return;
+    }
+
+    UsuarioDAO dao = new UsuarioDAO();
+    UsuarioDAO.SesionInfo sesion = dao.login(u, p);
+    
+    if (sesion.valido) {
+        // Login exitoso
+        String rolTexto = "";
+        if("A".equals(sesion.rol)) rolTexto = " (Administrador)";
+        else if("M".equals(sesion.rol)) rolTexto = " (Mecánico)";
+        else if("S".equals(sesion.rol)) rolTexto = " (Secretaría)";
+
+        JOptionPane.showMessageDialog(this, "¡Bienvenido " + sesion.nombreCompleto + "!" + rolTexto);
+        
+        new MainFrame().setVisible(true);
+        dispose();
+    } else {
+        JOptionPane.showMessageDialog(this, 
+            "Usuario o contraseña incorrectos", 
+            "Error", JOptionPane.ERROR_MESSAGE);
+    }
+});
 
         btnExit.addActionListener(e -> System.exit(0));
 

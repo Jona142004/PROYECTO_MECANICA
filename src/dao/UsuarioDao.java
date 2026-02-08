@@ -5,31 +5,47 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
-public class UsuarioDao {
+public class UsuarioDAO {
     
-    /**
-     * Verifica si el usuario y contraseña existen en la BD.
-     */
-    public boolean login(String usuario, String password) {
-        // Asegúrate de tener una tabla llamada USUARIOS con columnas USERNAME y PASSWORD
-        String sql = "SELECT USERNAME FROM USUARIOS WHERE USERNAME = ? AND PASSWORD = ?";
+    public static class SesionInfo {
+        public boolean valido = false;
+        public String nombreCompleto;
+        public String rol; 
+    }
+
+    public SesionInfo login(String cedula, String clave) {
+        SesionInfo info = new SesionInfo();
+
+        // --- ADAPTACIÓN A TU BASE DE DATOS ---
+        // 1. Buscamos por e.emp_cedula (Tabla Empleados) en vez de usuario.
+        // 2. Usamos los nombres reales de tus columnas: emp_nombre, usu_contrasenia
+        String sql = "SELECT e.emp_nombre, e.emp_apellido, u.usu_tipo_permiso " +
+                     "FROM AUT_USUARIOS u " +
+                     "JOIN AUT_EMPLEADOS e ON u.AUT_EMPLEADOS_emp_id = e.emp_id " +
+                     "WHERE e.emp_cedula = ? AND u.usu_contrasenia = ?";
         
-        try (Connection con = Conexion.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+        Connection con = Conexion.getConexion();
+        if (con == null) {
+            return info; // Retorna falso si no hay conexión
+        }
+
+        try (Connection c = con;
+             PreparedStatement ps = c.prepareStatement(sql)) {
             
-            if (con == null) return false; // Si falló la conexión
-            
-            ps.setString(1, usuario);
-            ps.setString(2, password);
+            ps.setString(1, cedula); // El primer ? será la Cédula
+            ps.setString(2, clave);  // El segundo ? será la Contraseña
             
             try (ResultSet rs = ps.executeQuery()) {
-                // Si rs.next() es true, significa que encontró una fila (el usuario existe)
-                return rs.next();
+                if (rs.next()) {
+                    info.valido = true;
+                    // Concatenamos nombre y apellido para el saludo
+                    info.nombreCompleto = rs.getString("emp_nombre") + " " + rs.getString("emp_apellido");
+                    info.rol = rs.getString("usu_tipo_permiso");
+                }
             }
-            
         } catch (Exception e) {
-            System.err.println("Error en login: " + e.getMessage());
-            return false;
+            System.err.println("Error Login: " + e.getMessage());
         }
+        return info;
     }
 }
