@@ -17,8 +17,6 @@ import java.awt.*;
 public class MainFrame extends JFrame {
 
     private JPanel sidebar;
-    private JComboBox<String> roleSelector;
-
     private AccordionSection secEmpleados;
     private AccordionSection secUsuarios;
 
@@ -52,9 +50,6 @@ public class MainFrame extends JFrame {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 12));
         right.setOpaque(false);
 
-        roleSelector = new JComboBox<>(new String[]{"Administrador", "Empleado General"});
-        roleSelector.addActionListener(e -> applyRoleUI((String) roleSelector.getSelectedItem()));
-
         JButton logout = UITheme.primaryButton("Cerrar sesión");
         logout.addActionListener(e -> {
             // SOLO UI: cierre visual
@@ -64,7 +59,6 @@ public class MainFrame extends JFrame {
         });
 
         right.add(new JLabel("Rol:"));
-        right.add(roleSelector);
         right.add(logout);
 
         top.add(title, BorderLayout.WEST);
