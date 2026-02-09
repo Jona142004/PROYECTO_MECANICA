@@ -1,82 +1,87 @@
 package ui.servicios;
 
+import dao.ServicioDAO;
+import model.Servicio;
 import ui.theme.UITheme;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.util.List;
 import java.util.function.Consumer;
 
 public class ServicioDialog extends JDialog {
 
-    public ServicioDialog(JFrame parent, Consumer<ServicioItem> onSelect) {
+    private Consumer<Servicio> onSelect; 
+
+    public ServicioDialog(JFrame parent, Consumer<Servicio> onSelect) {
         super(parent, "Buscar Servicio", true);
-        setSize(720, 420);
+        this.onSelect = onSelect;
+        setSize(700, 400);
         setLocationRelativeTo(parent);
-        setLayout(new BorderLayout(10, 10));
-
+        
+        // Panel superior
         JTextField filtro = new JTextField();
-        JButton buscar = UITheme.primaryButton("Buscar");
-
-        JPanel top = new JPanel(new BorderLayout(6, 0));
-        top.add(new JLabel("Buscar (código / nombre):"), BorderLayout.WEST);
+        JButton btnBuscar = UITheme.primaryButton("Buscar");
+        JPanel top = new JPanel(new BorderLayout(5, 5));
+        top.add(new JLabel("Nombre:"), BorderLayout.WEST);
         top.add(filtro, BorderLayout.CENTER);
-        top.add(buscar, BorderLayout.EAST);
+        top.add(btnBuscar, BorderLayout.EAST);
 
-        String[] cols = {"Código", "Servicio", "Precio", "Grava IVA", "Estado"};
+        // Tabla
+        String[] cols = {"ID", "Nombre", "Precio", "IVA"};
         DefaultTableModel model = new DefaultTableModel(cols, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int r, int c) { return false; }
         };
-
-        // Datos mock (solo UI)
-        model.addRow(new Object[]{"SRV-001", "Cambio de aceite", "25.00", "SÍ", "ACTIVO"});
-        model.addRow(new Object[]{"SRV-002", "Alineación y balanceo", "30.00", "SÍ", "ACTIVO"});
-        model.addRow(new Object[]{"SRV-003", "Lavado motor", "15.00", "NO", "ACTIVO"});
-
         JTable table = new JTable(model);
-        table.setRowHeight(26);
-
-        // Doble clic
-        table.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (e.getClickCount() == 2) {
-                    seleccionarActual(table, model, onSelect);
-                }
+        
+        // Eventos
+        btnBuscar.addActionListener(e -> cargarTabla(model, filtro.getText()));
+        filtro.addActionListener(e -> cargarTabla(model, filtro.getText()));
+        
+        table.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                if(e.getClickCount() == 2) seleccionar(table);
             }
         });
 
-        JButton aceptar = UITheme.primaryButton("Aceptar");
-        aceptar.addActionListener(e -> seleccionarActual(table, model, onSelect));
-
-        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        bottom.add(aceptar);
+        // Cargar inicial
+        cargarTabla(model, "");
 
         add(top, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
-        add(bottom, BorderLayout.SOUTH);
-
-        // (UI mock) botón buscar no filtra realmente, solo muestra mensaje
-        buscar.addActionListener(e -> {
-            // Aquí luego filtras en BD; por ahora solo UI
-            // JOptionPane.showMessageDialog(this, "Filtro: " + filtro.getText());
-        });
     }
 
-    private void seleccionarActual(JTable table, DefaultTableModel model, Consumer<ServicioItem> onSelect) {
-        int row = table.getSelectedRow();
-        if (row == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione un servicio", "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
+    private void cargarTabla(DefaultTableModel model, String busqueda) {
+        model.setRowCount(0);
+        ServicioDAO dao = new ServicioDAO();
+        // Si tienes buscarPorNombre usa ese, si no, listar() y filtra
+        List<Servicio> lista = dao.listar(); 
+        
+        for(Servicio s : lista) {
+            if(busqueda.isEmpty() || s.getNombre().toUpperCase().contains(busqueda.toUpperCase())) {
+                if(s.getEstado().equals("A")) { // Solo activos
+                    model.addRow(new Object[]{s.getId(), s.getNombre(), s.getPrecio(), s.getIva()});
+                }
+            }
         }
+    }
 
-        String codigo = model.getValueAt(row, 0).toString();
-        String nombre = model.getValueAt(row, 1).toString();
-        double precio = Double.parseDouble(model.getValueAt(row, 2).toString());
-        boolean grava = "SÍ".equalsIgnoreCase(model.getValueAt(row, 3).toString());
-
-        onSelect.accept(new ServicioItem(codigo, nombre, precio, grava));
+    private void seleccionar(JTable table) {
+        int row = table.getSelectedRow();
+        if(row == -1) return;
+        
+        Servicio s = new Servicio();
+        s.setId(Integer.parseInt(table.getValueAt(row, 0).toString()));
+        s.setNombre(table.getValueAt(row, 1).toString());
+        s.setPrecio(Double.parseDouble(table.getValueAt(row, 2).toString()));
+        
+        String ivaVal = table.getValueAt(row, 3).toString();
+        s.setIva(ivaVal.equals("S") || ivaVal.equals("SÍ") ? "S" : "N");
+        
+        onSelect.accept(s);
         dispose();
     }
-
-
 }

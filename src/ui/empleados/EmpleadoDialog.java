@@ -27,8 +27,7 @@ public class EmpleadoDialog extends JDialog {
         DefaultTableModel model = new DefaultTableModel(cols, 0);
 
         // 👉 Datos mock (solo UI)
-        model.addRow(new Object[]{"1", "0102030405", "Juan", "Pérez", "0999999999", "@sddsd", "activo"});
-        model.addRow(new Object[]{"1", "0102030405", "Juan", "Pérez", "0999999999", "@sddsd", "activo"});
+  
         JTable table = new JTable(model);
         table.setRowHeight(26);
 

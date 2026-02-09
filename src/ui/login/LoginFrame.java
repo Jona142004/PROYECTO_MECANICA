@@ -1,7 +1,8 @@
 package ui.login;
-import dao.UsuarioDAO;
 
-import ui.menu.MainFrame;
+import dao.UsuarioDAO;
+import model.Sesion; // Importante
+import ui.menu.MainFrame; // Importante para cargar la interfaz
 import ui.theme.UITheme;
 
 import javax.swing.*;
@@ -15,28 +16,20 @@ public class LoginFrame extends JFrame {
         setSize(1200, 650);
         setLocationRelativeTo(null);
 
-        // Fondo completo
+        // Fondo y Estructura
         ImagePanel background = new ImagePanel("background.jpg");
         setContentPane(background);
 
-        // Grid para posicionar logo + card
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(0, 0, 0, 0);
         gbc.fill = GridBagConstraints.NONE;
 
-        // Panel izquierdo (texto + logo)
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 0.5;
-        gbc.anchor = GridBagConstraints.WEST;
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0.5; gbc.anchor = GridBagConstraints.WEST;
         background.add(buildBrandPanel(), gbc);
 
-        // Login card
-        gbc.gridx = 1;
-        gbc.anchor = GridBagConstraints.CENTER;
+        gbc.gridx = 1; gbc.anchor = GridBagConstraints.CENTER;
         background.add(buildLoginCard(), gbc);
     }
-
 
     private JPanel buildBrandPanel() {
         JPanel panel = new JPanel();
@@ -52,9 +45,7 @@ public class LoginFrame extends JFrame {
         subtitle.setFont(new Font("Arial", Font.PLAIN, 15));
         subtitle.setForeground(Color.WHITE);
 
-        JLabel logo = new JLabel(new ImageIcon(
-            getClass().getResource("logo.png")
-        ));
+        JLabel logo = new JLabel(new ImageIcon(getClass().getResource("logo.png")));
         logo.setBorder(BorderFactory.createEmptyBorder(30, 0, 0, 0));
 
         panel.add(title);
@@ -62,7 +53,6 @@ public class LoginFrame extends JFrame {
         panel.add(subtitle);
         panel.add(Box.createVerticalStrut(10));
         panel.add(logo);
-
         return panel;
     }
 
@@ -77,64 +67,33 @@ public class LoginFrame extends JFrame {
         JPanel content = new JPanel();
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setOpaque(false);
-
-        // ancho real del formulario (no del card)
         content.setMaximumSize(new Dimension(320, Integer.MAX_VALUE));
         content.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        /* ================= HEADER ================= */
-        JLabel h = new JLabel("Iniciar sesión");
-        h.setFont(new Font("SansSerif", Font.BOLD, 22));
-        h.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Header
+        JLabel h = new JLabel("Iniciar sesión"); h.setFont(new Font("SansSerif", Font.BOLD, 22)); h.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel d = new JLabel("Ingresa con un usuario autorizado"); d.setForeground(UITheme.MUTED); d.setAlignmentX(Component.CENTER_ALIGNMENT);
+        content.add(h); content.add(Box.createVerticalStrut(4)); content.add(d); content.add(Box.createVerticalStrut(22));
 
-        JLabel d = new JLabel("Ingresa con un usuario autorizado");
-        d.setForeground(UITheme.MUTED);
-        d.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        content.add(h);
-        content.add(Box.createVerticalStrut(4));
-        content.add(d);
-        content.add(Box.createVerticalStrut(22));
-
-        /* ================= FORM ================= */
+        // Form
         JTextField txtUser = new JTextField();
         JPasswordField txtPass = new JPasswordField();
-
         Dimension fieldSize = new Dimension(300, 38);
+        txtUser.setMaximumSize(fieldSize); txtUser.setPreferredSize(fieldSize); txtUser.setAlignmentX(Component.CENTER_ALIGNMENT);
+        txtPass.setMaximumSize(fieldSize); txtPass.setPreferredSize(fieldSize); txtPass.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        txtUser.setMaximumSize(fieldSize);
-        txtUser.setPreferredSize(fieldSize);
-        txtUser.setAlignmentX(Component.CENTER_ALIGNMENT);
+        content.add(labelBold("Usuario")); content.add(Box.createVerticalStrut(6)); content.add(txtUser); content.add(Box.createVerticalStrut(16));
+        content.add(labelBold("Contraseña")); content.add(Box.createVerticalStrut(6)); content.add(txtPass); content.add(Box.createVerticalStrut(28));
 
-        txtPass.setMaximumSize(fieldSize);
-        txtPass.setPreferredSize(fieldSize);
-        txtPass.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        content.add(labelBold("Usuario"));
-        content.add(Box.createVerticalStrut(6));
-        content.add(txtUser);
-        content.add(Box.createVerticalStrut(16));
-
-        content.add(labelBold("Contraseña"));
-        content.add(Box.createVerticalStrut(6));
-        content.add(txtPass);
-        content.add(Box.createVerticalStrut(28));
-
-        /* ================= ACTIONS ================= */
+        // Botones
         JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 16, 0));
         row.setOpaque(false);
-
         JButton btnLogin = UITheme.primaryButton("INGRESAR");
         JButton btnExit  = UITheme.primaryButton("SALIR");
-
         Dimension btnSize = new Dimension(140, 40);
+        btnLogin.setPreferredSize(btnSize); btnExit.setPreferredSize(btnSize);
 
-        btnLogin.setPreferredSize(btnSize);
-        btnLogin.setMaximumSize(btnSize);
-
-        btnExit.setPreferredSize(btnSize);
-        btnExit.setMaximumSize(btnSize);
-
+        // --- LÓGICA DEL BOTÓN ---
         btnLogin.addActionListener(e -> {
             String u = txtUser.getText();
             String p = new String(txtPass.getPassword());
@@ -145,47 +104,38 @@ public class LoginFrame extends JFrame {
             }
 
             UsuarioDAO dao = new UsuarioDAO();
-            UsuarioDAO.SesionInfo sesion = dao.login(u, p);
+            Sesion sesion = dao.login(u, p); // Llama al DAO
             
-            if (sesion.valido) {
-                // Login exitoso
-                String rolTexto = "";
-                if("A".equals(sesion.rol)) rolTexto = " (Administrador)";
-                else if("E".equals(sesion.rol)) rolTexto = " (Recepcionista)";
-
-                JOptionPane.showMessageDialog(this, "¡Bienvenido " + sesion.nombreCompleto + "!" + rolTexto);
+            if (sesion != null) {
+                // Guardar Sesión
+                Sesion.setSesionActual(sesion);
                 
-                new MainFrame(sesion.rol).setVisible(true);
+                JOptionPane.showMessageDialog(this, "Bienvenido " + sesion.getNombreCompleto());
+                
+                // --- AQUÍ ESTABA EL ERROR ---
+                // Antes: new MainFrame().setVisible(true);
+                // Ahora: Le pasamos el rol de la sesión
+                new MainFrame(sesion.getRol()).setVisible(true); // <--- CORRECCIÓN
+                
                 dispose();
             } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Usuario o contraseña incorrectos", 
-                    "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Usuario o contraseña incorrectos", "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
 
         btnExit.addActionListener(e -> System.exit(0));
 
-        row.add(btnLogin);
-        row.add(btnExit);
+        row.add(btnLogin); row.add(btnExit);
+        content.add(row); content.add(Box.createVerticalStrut(18));
 
-        content.add(row);
-        content.add(Box.createVerticalStrut(18));
-
-        /* ================= FOOTER ================= */
-        JLabel note = new JLabel("Nota: Esta versión es solo interfaz (no funcional).");
-        note.setForeground(UITheme.MUTED);
-        note.setFont(new Font("SansSerif", Font.PLAIN, 11));
-        note.setAlignmentX(Component.CENTER_ALIGNMENT);
-
+        // Footer
+        JLabel note = new JLabel("Sistema conectado a Oracle Database");
+        note.setForeground(UITheme.MUTED); note.setFont(new Font("SansSerif", Font.PLAIN, 11)); note.setAlignmentX(Component.CENTER_ALIGNMENT);
         content.add(note);
+        
         card.add(content);
-
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.anchor = GridBagConstraints.CENTER;
-
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.CENTER;
         wrap.add(card, gbc);
 
         return wrap;
@@ -199,5 +149,4 @@ public class LoginFrame extends JFrame {
         l.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
         return l;
     }
-
 }

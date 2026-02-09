@@ -1,329 +1,331 @@
 package ui.facturacion;
 
+import dao.FacturaDAO;
+import model.DetalleFactura;
+import model.Factura;
+import model.Sesion;
 import ui.clientes.ClienteDialog;
 import ui.components.SelectorPanel;
-import ui.servicios.ServicioItem;
-import ui.servicios.ServicioDialog; // ajusta si tu clase se llama diferente
+import ui.components.UIMode;
+import ui.servicios.ServicioDialog;
 import ui.theme.UITheme;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 public class FacturacionFrame extends JFrame {
 
-    private static final double IVA_RATE = 0.12;
+    private UIMode mode; // El modo actual (ADD, VIEW, DELETE)
+    private int idFacturaCargada = -1; // ID de la factura que estamos viendo/anulando
 
-    // Detalle (inputs)
-    private JTextField codigoServicio;
-    private JTextField cantidad;
-
-    // Tabla detalle
-    private JTable table;
-    private DefaultTableModel model;
-
-    private ServicioItem servicioSeleccionado = null;
-    private int editRow = 0;
-
-    // Cabecera (solo lectura)
+    // Cabecera
     private JTextField numFactura;
     private JTextField fecha;
     private JTextField usuario;
-
     private SelectorPanel cliente;
 
-    // Botón guardar factura
-    private JButton btnGuardarFactura;
+    // Detalle
+    private JTable table;
+    private DefaultTableModel model;
+    
+    // Botones Detalle
+    private JButton btnAddService, btnDelService;
 
-    public FacturacionFrame() {
+    // Totales
+    private JLabel lblSubtotal, lblIva, lblTotal;
+    
+    // Botones Acción
+    private JButton btnGuardar;
+    private JButton btnAnular; // Nuevo botón rojo
+
+    // Lógica de Negocio
+    private List<DetalleFactura> detalles = new ArrayList<>();
+    private int idClienteSeleccionado = -1;
+
+    public FacturacionFrame(UIMode mode) {
+        this.mode = mode;
         setTitle("Facturación - Autos y Motores");
         setSize(1250, 720);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        add(header("Facturación", "Cabecera y detalle de factura (solo UI)"), BorderLayout.NORTH);
+        String titulo = (mode == UIMode.ADD) ? "Nueva Venta" : (mode == UIMode.DELETE ? "Anular Factura" : "Consultar Factura");
+        add(header("Facturación", titulo), BorderLayout.NORTH);
         add(content(), BorderLayout.CENTER);
+        add(footer(), BorderLayout.SOUTH);
 
-        // Mock: usuario conectado
-        setDatosAutomaticos("USUARIO_CONECTADO");
+        // LÓGICA DE INICIO SEGÚN MODO
+        if (mode == UIMode.ADD) {
+            cargarDatosIniciales();
+            aplicarPermisos(true); // Habilitar todo
+        } else {
+            // Si es Buscar o Anular, abrimos el buscador automáticamente
+            // Usamos invokeLater para que la ventana cargue primero
+            SwingUtilities.invokeLater(this::abrirBuscador);
+            aplicarPermisos(false); // Bloquear todo por defecto
+        }
+    }
+    
+    public FacturacionFrame() { this(UIMode.ADD); }
+
+    // --- MÉTODOS DE CARGA ---
+
+    private void cargarDatosIniciales() {
+        numFactura.setText(new FacturaDAO().generarNumeroFactura());
+        fecha.setText(new SimpleDateFormat("dd/MM/yyyy").format(new Date()));
+        if (Sesion.get() != null) {
+            usuario.setText(Sesion.get().getNombreCompleto());
+        } else {
+            usuario.setText("Invitado (Sin Sesión)");
+        }
     }
 
-    private void setDatosAutomaticos(String userLogged) {
-        numFactura.setText("FAC-" + String.format("%06d", 1)); // mock
-        fecha.setText(LocalDate.now().format(DateTimeFormatter.ISO_DATE));
-        usuario.setText(userLogged);
-
-        // Solo lectura
-        numFactura.setEditable(false);
-        fecha.setEditable(false);
-        usuario.setEditable(false);
-
-        // visibles
-        numFactura.setEnabled(true);
-        fecha.setEnabled(true);
-        usuario.setEnabled(true);
+    private void abrirBuscador() {
+        new FacturasListDialog(this, (id) -> {
+            cargarFacturaDesdeBD(id);
+        }).setVisible(true);
     }
+
+    private void cargarFacturaDesdeBD(int id) {
+        FacturaDAO dao = new FacturaDAO();
+        
+        // 1. Cargar Detalles
+        detalles = dao.listarDetalles(id);
+        idFacturaCargada = id;
+        
+        // 2. Reflejar en Tabla
+        recalcularTabla();
+        
+        // 3. Simular datos cabecera (Idealmente deberías tener un método 'buscarPorId' en DAO que traiga todo)
+        // Por ahora ponemos datos visuales
+        numFactura.setText("FACT-" + id); 
+        fecha.setText("(Fecha guardada)"); 
+        usuario.setText("(Vendedor original)");
+        cliente.setText("(Cliente original)");
+
+        // 4. Activar botón Anular si es modo DELETE
+        if (mode == UIMode.DELETE) {
+            btnAnular.setVisible(true);
+        }
+    }
+
+    private void aplicarPermisos(boolean editable) {
+        cliente.setEnabled(editable);
+        btnAddService.setEnabled(editable);
+        btnDelService.setEnabled(editable);
+        btnGuardar.setVisible(editable);
+        btnAnular.setVisible(false); // Se activa solo al cargar factura en modo DELETE
+    }
+
+    // ================= UI PRINCIPAL =================
 
     private JPanel content() {
         JPanel root = new JPanel(new BorderLayout());
         root.setBorder(BorderFactory.createEmptyBorder(10, 16, 10, 16));
         root.setBackground(UITheme.BG);
 
-        // ===================== CABECERA =====================
+        // --- SECCIÓN CABECERA ---
         JPanel cab = UITheme.cardPanel();
         cab.setLayout(new GridBagLayout());
+        cab.setPreferredSize(new Dimension(0, 180));
 
         GridBagConstraints g = new GridBagConstraints();
-        g.insets = new Insets(6, 6, 6, 6);
-        g.fill = GridBagConstraints.HORIZONTAL;
-        g.weightx = 1;
+        g.insets = new Insets(6, 6, 6, 6); g.fill = GridBagConstraints.HORIZONTAL;
 
-        numFactura = new JTextField();
-        fecha = new JTextField();
-        usuario = new JTextField();
-
-        // Solo lectura pero visibles
-        numFactura.setEditable(false);
-        fecha.setEditable(false);
-        usuario.setEditable(false);
-
-        numFactura.setEnabled(true);
-        fecha.setEnabled(true);
-        usuario.setEnabled(true);
+        numFactura = new JTextField(); numFactura.setEditable(false);
+        fecha = new JTextField();      fecha.setEditable(false);
+        usuario = new JTextField();    usuario.setEditable(false);
 
         cliente = new SelectorPanel("(Seleccionar cliente)");
         cliente.setOnSearch(() -> {
-            ClienteDialog dialog = new ClienteDialog(this, cliente::setText);
-            dialog.setVisible(true);
+            new ClienteDialog(this, (res) -> {
+                cliente.setText(res);
+                try {
+                    String[] parts = res.split(" - ");
+                    if (parts.length > 0) idClienteSeleccionado = Integer.parseInt(parts[0]);
+                } catch (Exception e) { idClienteSeleccionado = -1; }
+            }).setVisible(true);
         });
 
         int r = 0;
-        addField(cab, g, r++, "Número factura", numFactura);
-        addField(cab, g, r++, "Fecha emisión", fecha);
+        addField(cab, g, r++, "Nro. Factura", numFactura);
+        addField(cab, g, r++, "Fecha Emisión", fecha);
         addField(cab, g, r++, "Cliente", cliente);
-        addField(cab, g, r++, "Usuario", usuario);
+        addField(cab, g, r++, "Vendedor", usuario);
 
-        // ✅ Para que la cabecera NO se coma media pantalla
-        cab.setPreferredSize(new Dimension(0, 220));
-
-        // ===================== DETALLE =====================
+        // --- SECCIÓN DETALLE (TABLA) ---
         JPanel det = UITheme.cardPanel();
         det.setLayout(new BorderLayout(0, 10));
-        det.setBorder(BorderFactory.createCompoundBorder(
-                det.getBorder(),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)
-        ));
+        det.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // ---------- TOP (inputs + botones) ----------
-        JPanel topCompacto = new JPanel(new GridBagLayout());
-        topCompacto.setOpaque(false);
+        // Toolbar botones
+        JPanel tools = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        tools.setOpaque(false);
+        btnAddService = UITheme.primaryButton("+ Agregar Servicio");
+        btnDelService = UITheme.primaryButton("- Quitar Seleccionado");
+        
+        btnAddService.addActionListener(e -> agregarServicio());
+        btnDelService.addActionListener(e -> quitarServicio());
+        
+        tools.add(btnAddService); tools.add(btnDelService);
 
-        GridBagConstraints d = new GridBagConstraints();
-        d.insets = new Insets(4, 4, 4, 4);
-        d.fill = GridBagConstraints.HORIZONTAL;
-        d.gridy = 0;
-
-        codigoServicio = new JTextField();
-        cantidad = new JTextField("1");
-
-        JButton btnBuscarServicio = UITheme.primaryButton("🔍");
-        btnBuscarServicio.setPreferredSize(new Dimension(46, 30));
-        btnBuscarServicio.addActionListener(e -> abrirServiciosDialog());
-
-        JPanel codigoPanel = new JPanel(new BorderLayout(6, 0));
-        codigoPanel.setOpaque(false);
-        codigoPanel.add(codigoServicio, BorderLayout.CENTER);
-        codigoPanel.add(btnBuscarServicio, BorderLayout.EAST);
-
-        JButton btnAgregarDetalle = UITheme.primaryButton("Agregar detalle");
-        JButton btnQuitarDetalle = UITheme.primaryButton("Quitar detalle");
-
-        JPanel panelBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        panelBtns.setOpaque(false);
-        panelBtns.add(btnAgregarDetalle);
-        panelBtns.add(btnQuitarDetalle);
-
-        d.gridx = 0; d.weightx = 0;
-        topCompacto.add(new JLabel("Código servicio"), d);
-
-        d.gridx = 1; d.weightx = 0.62;
-        topCompacto.add(codigoPanel, d);
-
-        d.gridx = 2; d.weightx = 0;
-        topCompacto.add(new JLabel("Cantidad"), d);
-
-        d.gridx = 3; d.weightx = 0.12;
-        topCompacto.add(cantidad, d);
-
-        d.gridx = 4; d.weightx = 0.26;
-        topCompacto.add(panelBtns, d);
-
-
-        String[] cols = {"Código", "Servicio", "Cantidad", "Precio Unit.", "Subtotal", "IVA", "Total"};
+        String[] cols = {"Cant", "Descripción", "P. Unit ($)", "Subtotal", "IVA", "Total"};
         model = new DefaultTableModel(cols, 0) {
-            @Override
-            public boolean isCellEditable(int row, int col) {
-                return row == editRow && col == 2;
-            }
+            public boolean isCellEditable(int r, int c) { return false; }
         };
-
         table = new JTable(model);
         table.setRowHeight(28);
-        table.setFillsViewportHeight(true);
+        
+        det.add(tools, BorderLayout.NORTH);
+        det.add(new JScrollPane(table), BorderLayout.CENTER);
 
-        // ✅ Haz que se vea “grande” y aproveche el ancho
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-
-        JScrollPane scroll = new JScrollPane(table);
-        scroll.setBorder(BorderFactory.createEmptyBorder());
-        // ✅ Esto hace que el scrollpane “jale” espacio en el layout
-        scroll.setMinimumSize(new Dimension(0, 380));
-
-        // fila inicial en edición
-        editRow = 0;
-        model.addRow(new Object[]{"", "", 1, "0.00", "0.00", "0.00", "0.00"});
-
-        // ---------- FOOTER (Guardar Factura) ----------
-        JPanel detBottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        detBottom.setOpaque(false);
-
-        btnGuardarFactura = UITheme.primaryButton("Guardar Factura");
-        btnGuardarFactura.addActionListener(e ->
-                JOptionPane.showMessageDialog(this, "Factura guardada (Solo UI)")
-        );
-        detBottom.add(btnGuardarFactura);
-
-        det.add(topCompacto, BorderLayout.NORTH);
-        det.add(scroll, BorderLayout.CENTER);
-        det.add(detBottom, BorderLayout.SOUTH);
-
-        // eventos
-        btnAgregarDetalle.addActionListener(e -> confirmarDetalle());
-        btnQuitarDetalle.addActionListener(e -> quitarDetalle());
-
-        // ===================== SPLIT (la tabla domina) =====================
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, cab, det);
-        split.setBorder(null);
-        split.setOneTouchExpandable(false);
-
-        // ✅ Más espacio abajo (tabla). 0.22 = cabecera ~22%, detalle ~78%
-        split.setResizeWeight(0.18);
-        split.setDividerLocation(200);
-
+        split.setBorder(null); split.setResizeWeight(0.25);
+        
         root.add(split, BorderLayout.CENTER);
-
         return root;
     }
+    
+    // ================= SECCIÓN TOTALES Y BOTONES =================
+    
+    private JPanel footer() {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        p.setBackground(UITheme.BG);
+        
+        JPanel totalsPanel = new JPanel(new GridLayout(3, 2, 10, 5));
+        totalsPanel.setOpaque(false);
+        
+        lblSubtotal = new JLabel("0.00"); lblSubtotal.setHorizontalAlignment(SwingConstants.RIGHT);
+        lblIva = new JLabel("0.00");      lblIva.setHorizontalAlignment(SwingConstants.RIGHT);
+        lblTotal = new JLabel("0.00");    lblTotal.setHorizontalAlignment(SwingConstants.RIGHT);
+        lblTotal.setFont(new Font("SansSerif", Font.BOLD, 14));
+        
+        totalsPanel.add(new JLabel("Subtotal:")); totalsPanel.add(lblSubtotal);
+        totalsPanel.add(new JLabel("IVA Total:")); totalsPanel.add(lblIva);
+        totalsPanel.add(new JLabel("TOTAL A PAGAR:")); totalsPanel.add(lblTotal);
+        
+        // BOTONES DE ACCIÓN
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        actions.setOpaque(false);
+        
+        btnGuardar = UITheme.primaryButton("GUARDAR FACTURA");
+        btnGuardar.setPreferredSize(new Dimension(180, 45));
+        btnGuardar.addActionListener(e -> guardarFacturaBD());
+        
+        btnAnular = new JButton("ANULAR FACTURA");
+        btnAnular.setBackground(new Color(220, 38, 38)); // Rojo
+        btnAnular.setForeground(Color.WHITE);
+        btnAnular.setFont(new Font("SansSerif", Font.BOLD, 14));
+        btnAnular.setPreferredSize(new Dimension(180, 45));
+        btnAnular.setVisible(false); // Oculto por defecto
+        btnAnular.addActionListener(e -> anularFactura());
 
-    // ---------- Dialog servicios ----------
-    private void abrirServiciosDialog() {
-        ServicioDialog dialog = new ServicioDialog(this, item -> {
-            servicioSeleccionado = item;
-
-            // Mostrar código en textbox
-            codigoServicio.setText(item.getCodigo());
-
-            // Rellenar fila edición en tabla
-            model.setValueAt(item.getCodigo(), editRow, 0);
-            model.setValueAt(item.getNombre(), editRow, 1);
-
-            int cant = parseIntSafe(cantidad.getText(), 1);
-            model.setValueAt(cant, editRow, 2);
-
-            model.setValueAt(String.format("%.2f", item.getPrecio()), editRow, 3);
-
-            recalcularFilaEdicion();
-        });
-        dialog.setVisible(true);
+        actions.add(btnGuardar);
+        actions.add(btnAnular);
+        
+        p.add(totalsPanel, BorderLayout.EAST);
+        p.add(actions, BorderLayout.WEST);
+        
+        return p;
     }
 
-    private void recalcularFilaEdicion() {
-        if (servicioSeleccionado == null) return;
+    // ================= LÓGICA DE NEGOCIO =================
 
-        int cant = parseIntSafe(String.valueOf(model.getValueAt(editRow, 2)), 1);
-        double pu = servicioSeleccionado.getPrecio();
-
-        double sub = cant * pu;
-        double iva = servicioSeleccionado.isGravaIva() ? (sub * IVA_RATE) : 0.0;
-        double total = sub + iva;
-
-        model.setValueAt(String.format("%.2f", sub), editRow, 4);
-        model.setValueAt(String.format("%.2f", iva), editRow, 5);
-        model.setValueAt(String.format("%.2f", total), editRow, 6);
+    private void agregarServicio() {
+        new ServicioDialog(this, (servicio) -> {
+            String input = JOptionPane.showInputDialog(this, "Cantidad para " + servicio.getNombre() + ":", "1");
+            if(input == null) return;
+            try {
+                int cant = Integer.parseInt(input);
+                if(cant <= 0) throw new Exception();
+                boolean grava = servicio.getIva().equals("S");
+                DetalleFactura d = new DetalleFactura(servicio.getId(), servicio.getNombre(), cant, servicio.getPrecio(), grava);
+                detalles.add(d);
+                recalcularTabla();
+            } catch(Exception e) {
+                JOptionPane.showMessageDialog(this, "Cantidad inválida.");
+            }
+        }).setVisible(true);
     }
-
-    private void confirmarDetalle() {
-        String cod = String.valueOf(model.getValueAt(editRow, 0)).trim();
-        if (cod.isEmpty() || servicioSeleccionado == null) {
-            JOptionPane.showMessageDialog(this, "Seleccione un servicio (🔍).");
-            return;
-        }
-
-        int cant = parseIntSafe(String.valueOf(model.getValueAt(editRow, 2)), 0);
-        if (cant <= 0) {
-            JOptionPane.showMessageDialog(this, "Cantidad inválida (> 0).");
-            return;
-        }
-
-        // Nueva fila en edición
-        model.addRow(new Object[]{"", "", 1, "0.00", "0.00", "0.00", "0.00"});
-        editRow = model.getRowCount() - 1;
-
-        servicioSeleccionado = null;
-        codigoServicio.setText("");
-        cantidad.setText("1");
-
-        table.repaint();
-        table.scrollRectToVisible(table.getCellRect(editRow, 0, true));
-    }
-
-    private void quitarDetalle() {
+    
+    private void quitarServicio() {
         int row = table.getSelectedRow();
-        if (row == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione una fila para quitar.");
-            return;
+        if(row == -1) { JOptionPane.showMessageDialog(this, "Seleccione una fila."); return; }
+        detalles.remove(row);
+        recalcularTabla();
+    }
+    
+    private void recalcularTabla() {
+        model.setRowCount(0);
+        double subtotalGral = 0;
+        double ivaGral = 0;
+        
+        for(DetalleFactura d : detalles) {
+            d.calcular();
+            subtotalGral += d.getSubtotal();
+            ivaGral += d.getValorIva();
+            model.addRow(new Object[]{d.getCantidad(), d.getNombreServicio(), String.format("%.2f", d.getPrecioUnitario()), String.format("%.2f", d.getSubtotal()), String.format("%.2f", d.getValorIva()), String.format("%.2f", d.getTotal())});
         }
+        lblSubtotal.setText(String.format("%.2f", subtotalGral));
+        lblIva.setText(String.format("%.2f", ivaGral));
+        lblTotal.setText(String.format("%.2f", subtotalGral + ivaGral));
+    }
 
-        if (row == editRow) {
-            JOptionPane.showMessageDialog(this, "No puedes quitar la fila de edición.");
-            return;
+    private void guardarFacturaBD() {
+        if(idClienteSeleccionado == -1) { JOptionPane.showMessageDialog(this, "Seleccione un cliente."); return; }
+        if(detalles.isEmpty()) { JOptionPane.showMessageDialog(this, "La factura está vacía."); return; }
+        if(Sesion.get() == null) { JOptionPane.showMessageDialog(this, "Error de sesión."); return; }
+
+        Factura f = new Factura();
+        f.setNumero(numFactura.getText());
+        f.setFecha(new java.sql.Date(System.currentTimeMillis()));
+        f.setIdCliente(idClienteSeleccionado);
+        f.setIdUsuario(Sesion.get().getId());
+        try {
+            f.setSubtotal(Double.parseDouble(lblSubtotal.getText().replace(",", ".")));
+            f.setIva(Double.parseDouble(lblIva.getText().replace(",", ".")));
+            f.setTotal(Double.parseDouble(lblTotal.getText().replace(",", ".")));
+        } catch(Exception e) { return; }
+        f.setDetalles(detalles);
+
+        if(new FacturaDAO().guardarFactura(f)) {
+            JOptionPane.showMessageDialog(this, "¡Factura guardada correctamente!");
+            dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "Error al guardar en BD.");
         }
-
-        model.removeRow(row);
-        if (row < editRow) editRow--;
-
-        if (model.getRowCount() > 0) {
-            int showRow = Math.min(editRow, model.getRowCount() - 1);
-            table.scrollRectToVisible(table.getCellRect(showRow, 0, true));
+    }
+    
+    private void anularFactura() {
+        int confirm = JOptionPane.showConfirmDialog(this, "¿Está seguro de ANULAR esta factura?\nEsta acción es irreversible.", "Confirmar Anulación", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            FacturaDAO dao = new FacturaDAO();
+            if (dao.anular(idFacturaCargada)) {
+                JOptionPane.showMessageDialog(this, "Factura anulada correctamente.");
+                dispose();
+            } else {
+                JOptionPane.showMessageDialog(this, "Error al anular.");
+            }
         }
     }
 
-    private int parseIntSafe(String txt, int def) {
-        try { return Integer.parseInt(txt.trim()); }
-        catch (Exception e) { return def; }
-    }
+    // ================= UI HELPERS =================
 
-    // ---------- UI helpers ----------
     private JPanel header(String title, String subtitle) {
         JPanel top = new JPanel(new BorderLayout());
         top.setBackground(Color.WHITE);
         top.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER));
         top.setPreferredSize(new Dimension(0, 64));
-
-        JLabel t = new JLabel("  " + title);
-        t.setFont(new Font("SansSerif", Font.BOLD, 16));
-
-        JLabel s = new JLabel("  " + subtitle);
-        s.setForeground(UITheme.MUTED);
-
-        JPanel text = new JPanel();
-        text.setOpaque(false);
-        text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
-        text.add(t);
-        text.add(s);
-
+        JLabel t = new JLabel("  " + title); t.setFont(new Font("SansSerif", Font.BOLD, 16));
+        JLabel s = new JLabel("  " + subtitle); s.setForeground(UITheme.MUTED);
+        JPanel text = new JPanel(); text.setOpaque(false); text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
+        text.add(t); text.add(s);
         top.add(text, BorderLayout.WEST);
         return top;
     }

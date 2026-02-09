@@ -101,7 +101,7 @@ public class ClienteDAO {
     // 5. LISTAR TODOS LOS ACTIVOS (Para llenar la tabla)
     public List<Cliente> listarActivos() {
         List<Cliente> lista = new ArrayList<>();
-        String sql = "SELECT * FROM AUT_CLIENTES WHERE cli_estado = 'A' ORDER BY cli_apellido";
+        String sql = "SELECT * FROM AUT_CLIENTES ORDER BY cli_apellido";
         
         try (Connection con = Conexion.getConexion();
              PreparedStatement ps = con.prepareStatement(sql);

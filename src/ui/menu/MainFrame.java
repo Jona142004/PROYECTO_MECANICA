@@ -54,6 +54,8 @@ public class MainFrame extends JFrame {
         applyRoleUI(permisoSesion);
     }
 
+    
+
     private JPanel buildTopBar() {
         JPanel top = new JPanel(new BorderLayout());
         top.setBackground(Color.WHITE);

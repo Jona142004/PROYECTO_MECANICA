@@ -1,10 +1,7 @@
 {
-    "java.project.sourcePaths": [
-        "src"
-    ],
-    "java.project.outputPath": "bin",
-    "java.project.referencedLibraries": [
-        "c:\\Users\\eduar\\OneDrive\\Documentos\\4to Semestre\\Base de datos\\PROYECTO_MECANICA\\lib\\jcalendar-1.4.jar",
-        "c:\\Users\\eduar\\OneDrive\\Documentos\\4to Semestre\\Base de datos\\PROYECTO_MECANICA\\lib\\ojdbc17.jar"
-    ]
+  "java.project.sourcePaths": ["src"],
+  "java.project.outputPath": "bin",
+  "java.project.referencedLibraries": [
+    "lib/**/*.jar"
+  ]
 }

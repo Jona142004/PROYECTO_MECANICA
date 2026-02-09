@@ -1,217 +1,258 @@
 package ui.usuarios;
 
-import ui.components.SelectorPanel;
+import dao.UsuarioDAO;
+import model.Usuario;
+import ui.components.SelectorPanel; // Usamos el componente con Lupa
 import ui.components.UIMode;
-import ui.empleados.EmpleadoDialog;   // ✅ mejor que ClienteDialog
+import ui.empleados.EmpleadoDialog; // Usamos el buscador de Empleados
 import ui.theme.UITheme;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.List;
 
 public class UsuariosFrame extends JFrame {
 
     private UIMode mode;
 
-    // Campos
-    private SelectorPanel empleadoRecepcion;
-    private JTextField usuario;
-    private JPasswordField pass;
-    private JComboBox<String> permiso;
-    private JComboBox<String> estado;
+    // --- CAMPOS ---
+    private SelectorPanel selEmpleado; // CAMBIO: Usamos SelectorPanel en vez de JTextField
+    private JTextField txtUsuario;
+    private JPasswordField txtClave;
+    private JComboBox<String> cmbRol;
+    
+    // Variables de control
+   // private int idEmpleadoSeleccionado = -1;
+    private int idUsuarioSeleccionado = -1;
+    private String cedulaEmpleadoSeleccionada = "";
 
-    // Tabla
+    // Tabla y Botones
+    private JButton btnBuscarUsuario; 
     private JTable table;
     private DefaultTableModel model;
-
-    // Botones
-    private JButton btnBuscar;   // solo EDIT/DELETE
-    private JButton btnGuardar;  // ADD/EDIT
-    private JButton btnEliminar; // DELETE
+    private JButton btnGuardar;
+    private JButton btnEliminar;
 
     public UsuariosFrame(UIMode mode) {
         this.mode = mode;
-
-        setTitle("Usuarios - Autos y Motores");
-        setSize(1080, 620);
+        setTitle("Gestión de Usuarios - Autos y Motores");
+        setSize(950, 600);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        add(header("Gestión de Usuarios", "Solo personal de recepción (solo UI)"), BorderLayout.NORTH);
+        String titulo = (mode == UIMode.ADD) ? "Crear Nuevo Usuario" : "Eliminar Usuario";
+        add(header(titulo, "Gestión de credenciales del sistema"), BorderLayout.NORTH);
         add(content(), BorderLayout.CENTER);
 
         applyMode(mode);
+        cargarTabla(); 
+    }
+    
+    public UsuariosFrame() { this(UIMode.ADD); }
+
+    // --- CARGA DE DATOS ---
+    private void cargarTabla() {
+        model.setRowCount(0);
+        UsuarioDAO dao = new UsuarioDAO();
+        List<Usuario> lista = dao.listar();
+        for (Usuario u : lista) {
+            model.addRow(new Object[]{
+                u.getId(),
+                u.getUsuario(),
+                u.getRolNombre(), 
+                u.getNombreEmpleado(), // "Cédula - Nombre"
+                u.getEstado()
+            });
+        }
     }
 
-    public UsuariosFrame() {
-        this(UIMode.ADD);
-    }
-
+    // --- INTERFAZ GRÁFICA ---
     private JPanel content() {
         JPanel root = new JPanel(new BorderLayout());
         root.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
         root.setBackground(UITheme.BG);
 
+        // 1. PANEL FORMULARIO
         JPanel form = UITheme.cardPanel();
         form.setLayout(new GridBagLayout());
         GridBagConstraints g = new GridBagConstraints();
-        g.insets = new Insets(6, 6, 6, 6);
-        g.fill = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6); g.fill = GridBagConstraints.HORIZONTAL;
 
-        empleadoRecepcion = new SelectorPanel("(Seleccionar empleado de Recepción)");
-        usuario = new JTextField();               // ✅ clave para buscar
-        pass = new JPasswordField();
-        permiso = new JComboBox<>(new String[]{"ADMINISTRADOR", "EMPLEADO GENERAL"});
-        estado = new JComboBox<>(new String[]{"ACTIVO", "INACTIVO"});
-
-        empleadoRecepcion.setOnSearch(() -> {
-            EmpleadoDialog dialog = new EmpleadoDialog(this, empleadoRecepcion::setText);
-            dialog.setVisible(true);
+        // CONFIGURACIÓN DEL BUSCADOR DE EMPLEADO
+        selEmpleado = new SelectorPanel("(Buscar Empleado)");
+        selEmpleado.setOnSearch(() -> {
+            // Abrimos el buscador de empleados
+            new EmpleadoDialog(this, (resultado) -> {
+                // resultado suele venir como "ID - NOMBRE - CEDULA" o "NOMBRE - CEDULA"
+                // Depende de tu EmpleadoDialog. Asumiremos que devuelve algo útil.
+                selEmpleado.setText(resultado);
+                
+                // Intentamos extraer la cédula para el DAO
+                // Suponiendo formato: "Nombre Apellido - 1020304050"
+                try {
+                    String[] partes = resultado.split(" - ");
+                    // Si la cédula está al final (ajusta el índice según tu EmpleadoDialog)
+                    if (partes.length >= 2) {
+                        cedulaEmpleadoSeleccionada = partes[partes.length - 1].trim(); 
+                    } else {
+                        cedulaEmpleadoSeleccionada = resultado.trim();
+                    }
+                } catch (Exception e) {
+                    cedulaEmpleadoSeleccionada = "";
+                }
+            }).setVisible(true);
         });
 
+        txtUsuario = new JTextField();
+        txtClave = new JPasswordField();
+        cmbRol = new JComboBox<>(new String[]{"Administrador", "Empleado"});
+
+        btnBuscarUsuario = UITheme.primaryButton("🔍 Buscar Usuario");
+        btnBuscarUsuario.addActionListener(e -> abrirBuscadorUsuarios());
+
         int r = 0;
-        addField(form, g, r++, "Usuario (clave)", usuario);                 // ✅ clave arriba
-        addField(form, g, r++, "Empleado (Recepción)", empleadoRecepcion);
-        addField(form, g, r++, "Contraseña", pass);
-        addField(form, g, r++, "Permiso", permiso);
-        addField(form, g, r++, "Estado", estado);
+        if (mode == UIMode.DELETE) {
+            g.gridx = 0; g.gridy = r++; g.gridwidth = 2;
+            form.add(btnBuscarUsuario, g);
+            g.gridwidth = 1; 
+        }
+        
+        addField(form, g, r++, "Empleado", selEmpleado); 
+        addField(form, g, r++, "Usuario", txtUsuario);
+        addField(form, g, r++, "Contraseña", txtClave);
+        addField(form, g, r++, "Permiso", cmbRol);
 
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        // Botones
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT));
         actions.setOpaque(false);
-
-        btnBuscar = UITheme.primaryButton("Buscar");
-        btnGuardar = UITheme.primaryButton("Guardar");
-        btnEliminar = UITheme.primaryButton("Eliminar");
-
-        actions.add(btnBuscar);
-        actions.add(btnGuardar);
+        
+        btnGuardar = UITheme.primaryButton("Guardar Usuario");
+        btnEliminar = new JButton("ELIMINAR USUARIO");
+        btnEliminar.setBackground(new Color(220, 38, 38)); 
+        btnEliminar.setForeground(Color.WHITE);
+        
+        actions.add(btnGuardar); 
         actions.add(btnEliminar);
 
-        g.gridx = 0; g.gridy = r; g.gridwidth = 2;
-        form.add(actions, g);
+        g.gridx = 0; g.gridy = r; g.gridwidth = 2; form.add(actions, g);
 
+        // 2. PANEL TABLA
         JPanel tableCard = UITheme.cardPanel();
         tableCard.setLayout(new BorderLayout());
-        String[] cols = {"ID", "Empleado", "Usuario", "Permiso", "Estado"};
-        model = new DefaultTableModel(cols, 0);
+        String[] cols = {"ID Usr", "Usuario", "Rol", "Empleado Asignado", "Estado"};
+        
+        model = new DefaultTableModel(cols, 0) {
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
         table = new JTable(model);
         table.setRowHeight(26);
+        
         tableCard.add(new JScrollPane(table), BorderLayout.CENTER);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, form, tableCard);
-        split.setResizeWeight(0.42);
-        split.setBorder(null);
-
+        split.setResizeWeight(0.4); split.setBorder(null);
         root.add(split, BorderLayout.CENTER);
 
-        btnBuscar.addActionListener(e -> onBuscar());
+        // Listeners
         btnGuardar.addActionListener(e -> onGuardar());
         btnEliminar.addActionListener(e -> onEliminar());
 
         return root;
     }
 
-    private void applyMode(UIMode m) {
-        this.mode = m;
+    // --- LÓGICA DE NEGOCIO ---
 
-        btnBuscar.setVisible(m == UIMode.EDIT || m == UIMode.DELETE);
-        btnGuardar.setVisible(m == UIMode.ADD || m == UIMode.EDIT);
-        btnEliminar.setVisible(m == UIMode.DELETE);
-
-        if (m == UIMode.ADD) {
-            btnGuardar.setText("Agregar");
-            setKeyState(true, true);
-            setFieldsEnabled(true);
-        }
-
-        if (m == UIMode.EDIT) {
-            btnGuardar.setText("Guardar");
-            setKeyState(true, true);     // ✅ solo usuario editable
-            setFieldsEnabled(false);     // 🔒 hasta buscar
-        }
-
-        if (m == UIMode.DELETE) {
-            setKeyState(true, true);     // ✅ solo usuario editable
-            setFieldsEnabled(false);     // 🔒 hasta buscar
-        }
-
-        revalidate();
-        repaint();
+    private void abrirBuscadorUsuarios() {
+        new UsuarioDialog(this, (resultado) -> {
+            try {
+                // Formato esperado "ID - Usuario"
+                int id = Integer.parseInt(resultado.split(" - ")[0]);
+                seleccionarEnTablaPorID(id);
+            } catch (Exception e) {}
+        }).setVisible(true);
     }
-
-    private void setKeyState(boolean enabled, boolean editable) {
-        usuario.setEnabled(enabled);
-        usuario.setEditable(editable);
-    }
-
-    private void setFieldsEnabled(boolean enabled) {
-        empleadoRecepcion.setEnabled(enabled);
-        pass.setEnabled(enabled);
-        permiso.setEnabled(enabled);
-        estado.setEnabled(enabled);
-
-        // Para password también controlamos editable
-        pass.setEditable(enabled);
-    }
-
-    private void onBuscar() {
-        if (mode != UIMode.EDIT && mode != UIMode.DELETE) return;
-
-        // Mock: cargar datos del usuario
-        empleadoRecepcion.setText("Ana Torres - Recepción");
-        pass.setText("1234");
-        permiso.setSelectedItem("EMPLEADO GENERAL");
-        estado.setSelectedItem("ACTIVO");
-
-        // Bloquear clave
-        setKeyState(true, false);
-
-        if (mode == UIMode.EDIT) {
-            setFieldsEnabled(true);     // ✅ ahora sí puede editar
-        } else {
-            setFieldsEnabled(false);    // DELETE: solo lectura
+    
+    private void seleccionarEnTablaPorID(int id) {
+        for(int i=0; i<table.getRowCount(); i++) {
+            if(Integer.parseInt(table.getValueAt(i, 0).toString()) == id) {
+                table.setRowSelectionInterval(i, i);
+                idUsuarioSeleccionado = id;
+                txtUsuario.setText(table.getValueAt(i, 1).toString());
+                selEmpleado.setText(table.getValueAt(i, 3).toString()); // Visual
+                break;
+            }
         }
-
-        JOptionPane.showMessageDialog(this,
-                "Usuario cargado. Ya puedes " + (mode == UIMode.EDIT ? "editar." : "eliminar."));
     }
 
     private void onGuardar() {
-        if (mode == UIMode.ADD) JOptionPane.showMessageDialog(this, "Guardado (ADD) - Solo UI");
-        if (mode == UIMode.EDIT) JOptionPane.showMessageDialog(this, "Guardado (EDIT) - Solo UI");
+        // Validamos la variable que llenamos con el diálogo
+        if (cedulaEmpleadoSeleccionada.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Debe seleccionar un empleado usando la lupa."); return;
+        }
+        if (txtUsuario.getText().isEmpty() || txtClave.getPassword().length == 0) {
+            JOptionPane.showMessageDialog(this, "Usuario y contraseña requeridos."); return;
+        }
+
+        Usuario u = new Usuario();
+        u.setUsuario(txtUsuario.getText());
+        u.setClave(new String(txtClave.getPassword()));
+        u.setRol(cmbRol.getSelectedItem().equals("Administrador") ? "A" : "E");
+        
+        UsuarioDAO dao = new UsuarioDAO();
+        // Pasamos la cédula capturada desde el diálogo
+        if (dao.registrar(u, cedulaEmpleadoSeleccionada)) {
+            JOptionPane.showMessageDialog(this, "Usuario creado exitosamente.");
+            cargarTabla();
+            limpiar();
+        } else {
+            JOptionPane.showMessageDialog(this, "Error al guardar.\nPosibles causas:\n- El empleado NO es de Recepción.\n- El usuario ya existe.");
+        }
     }
 
     private void onEliminar() {
-        if (mode == UIMode.DELETE) JOptionPane.showMessageDialog(this, "Eliminado (DELETE) - Solo UI");
+        if (idUsuarioSeleccionado == -1) {
+            JOptionPane.showMessageDialog(this, "Seleccione un usuario para eliminar."); return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(this, "¿Seguro que desea eliminar?", "Confirmar", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            if (new UsuarioDAO().eliminar(idUsuarioSeleccionado)) {
+                JOptionPane.showMessageDialog(this, "Usuario eliminado.");
+                cargarTabla();
+                limpiar();
+            }
+        }
+    }
+    
+    private void limpiar() {
+        txtUsuario.setText("");
+        txtClave.setText("");
+        selEmpleado.setText("(Buscar Empleado)");
+        cedulaEmpleadoSeleccionada = "";
+        idUsuarioSeleccionado = -1;
     }
 
-    // ===== UI helpers =====
-    private JPanel header(String title, String subtitle) {
-        JPanel top = new JPanel(new BorderLayout());
-        top.setBackground(Color.WHITE);
-        top.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER));
-        top.setPreferredSize(new Dimension(0, 64));
+    private void applyMode(UIMode m) {
+        this.mode = m;
+        btnGuardar.setVisible(m == UIMode.ADD);
+        btnEliminar.setVisible(m == UIMode.DELETE);
+        btnBuscarUsuario.setVisible(m == UIMode.DELETE);
 
-        JLabel t = new JLabel("  " + title);
-        t.setFont(new Font("SansSerif", Font.BOLD, 16));
-
-        JLabel s = new JLabel("  " + subtitle);
-        s.setForeground(UITheme.MUTED);
-
-        JPanel text = new JPanel();
-        text.setOpaque(false);
-        text.setLayout(new BoxLayout(text, BoxLayout.Y_AXIS));
-        text.add(t);
-        text.add(s);
-
-        top.add(text, BorderLayout.WEST);
-        return top;
+        boolean editable = (m == UIMode.ADD);
+        selEmpleado.setEnabled(editable); // Habilita/Deshabilita el botón lupa
+        txtUsuario.setEditable(editable);
+        txtClave.setEditable(editable);
+        cmbRol.setEnabled(editable);
+        table.setEnabled(m == UIMode.DELETE);
     }
-
-    private void addField(JPanel p, GridBagConstraints g, int row, String label, JComponent field) {
-        g.gridx = 0; g.gridy = row; g.gridwidth = 1; g.weightx = 0.35;
-        p.add(new JLabel(label), g);
-        g.gridx = 1; g.weightx = 0.65;
-        p.add(field, g);
+    
+    // UI Helpers
+    private JPanel header(String t, String s) { 
+        JPanel top = new JPanel(new BorderLayout()); top.setBackground(Color.WHITE); top.setBorder(BorderFactory.createMatteBorder(0,0,1,0,UITheme.BORDER)); top.setPreferredSize(new Dimension(0,64));
+        JLabel title = new JLabel("  "+t); title.setFont(new Font("SansSerif",Font.BOLD,16));
+        JLabel sub = new JLabel("  "+s); sub.setForeground(UITheme.MUTED);
+        JPanel txt = new JPanel(); txt.setOpaque(false); txt.setLayout(new BoxLayout(txt,BoxLayout.Y_AXIS)); txt.add(title); txt.add(sub);
+        top.add(txt, BorderLayout.WEST); return top;
     }
+    private void addField(JPanel p, GridBagConstraints g, int r, String l, JComponent f) { g.gridx=0; g.gridy=r; p.add(new JLabel(l),g); g.gridx=1; p.add(f,g); }
 }

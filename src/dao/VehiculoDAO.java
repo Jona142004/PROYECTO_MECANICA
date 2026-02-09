@@ -151,4 +151,35 @@ public class VehiculoDAO {
             return false;
         }
     }
+    // 4. BUSCAR PARA EL DIÁLOGO (Por Placa o Cliente)
+    public List<Vehiculo> buscarPorFiltro(String texto) {
+        List<Vehiculo> lista = new ArrayList<>();
+        String sql = "SELECT v.veh_id, v.veh_placa, m.mar_nombre, mo.mod_nombre, c.cli_nombre, c.cli_apellido " +
+                     "FROM AUT_VEHICULOS v " +
+                     "JOIN AUT_MARCAS m ON v.AUT_MARCAS_mar_id = m.mar_id " +
+                     "JOIN AUT_MODELOS mo ON v.AUT_MODELOS_mod_id = mo.mod_id " +
+                     "JOIN AUT_CLIENTES c ON v.AUT_CLIENTES_cli_id = c.cli_id " +
+                     "WHERE UPPER(v.veh_placa) LIKE ? OR UPPER(c.cli_apellido) LIKE ?";
+        
+        try (Connection con = Conexion.getConexion();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            
+            String pattern = "%" + texto.toUpperCase() + "%";
+            ps.setString(1, pattern);
+            ps.setString(2, pattern);
+            
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Vehiculo v = new Vehiculo();
+                    v.setId(rs.getInt("veh_id"));
+                    v.setPlaca(rs.getString("veh_placa"));
+                    v.setNombreMarca(rs.getString("mar_nombre"));
+                    v.setNombreModelo(rs.getString("mod_nombre"));
+                    v.setNombreCliente(rs.getString("cli_nombre") + " " + rs.getString("cli_apellido"));
+                    lista.add(v);
+                }
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return lista;
+    }
 }
