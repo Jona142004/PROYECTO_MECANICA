@@ -1,40 +1,39 @@
-package model;
+ package model;
 
 public class DetalleFactura {
-    private int id; // ID del detalle (dta_id), opcional si solo insertamos
+    private int id; // dta_id
     private int idServicio;
-    private String nombreServicio; // Para mostrar en la tabla visualmente
+    private String nombreServicio; // Para mostrar en la tabla (no se guarda en BD, pero sirve en UI)
     private int cantidad;
     private double precioUnitario;
     private double subtotal;
     private double valorIva;
     private double total;
     
-    // Auxiliar para saber si calculamos IVA o no
+    // Auxiliar para saber si este servicio grava IVA (S/N)
     private boolean gravaIva;
 
     public DetalleFactura() {}
 
-    // Constructor completo para facilitar la creación desde la interfaz
+    // Constructor COMPLETO (Usado por la interfaz gráfica al agregar servicio)
     public DetalleFactura(int idServicio, String nombreServicio, int cantidad, double precioUnitario, boolean gravaIva) {
         this.idServicio = idServicio;
         this.nombreServicio = nombreServicio;
         this.cantidad = cantidad;
         this.precioUnitario = precioUnitario;
         this.gravaIva = gravaIva;
-        calcular(); // Calcular montos automáticamente al crear
+        
+        // Calculamos los montos inmediatamente
+        calcular();
     }
 
-    // Método para recalcular valores matemáticos
+    // Método que actualiza los cálculos matemáticos
     public void calcular() {
         this.subtotal = this.cantidad * this.precioUnitario;
         
-        // IVA del 15% (según tu lógica actual, ajustable si cambia la ley)
         if (this.gravaIva) {
+            // IVA del 15% (Puedes cambiar a 0.12 si es necesario)
             this.valorIva = this.subtotal * 0.15; 
-            // Nota: Podrías usar 0.12 o 0.15 según tu país. 
-            // Si necesitas precisión exacta de moneda, BigDecimal es mejor, 
-            // pero double funciona bien para este nivel escolar/académico.
         } else {
             this.valorIva = 0.0;
         }
@@ -56,21 +55,23 @@ public class DetalleFactura {
     public int getCantidad() { return cantidad; }
     public void setCantidad(int cantidad) { 
         this.cantidad = cantidad; 
-        calcular(); // Recalcular si cambia la cantidad
+        calcular(); // Si cambia cantidad, recalculamos
     }
 
     public double getPrecioUnitario() { return precioUnitario; }
     public void setPrecioUnitario(double precioUnitario) { 
         this.precioUnitario = precioUnitario;
-        calcular(); // Recalcular si cambia el precio
+        calcular(); // Si cambia precio, recalculamos
     }
 
     public double getSubtotal() { return subtotal; }
-    // No ponemos setSubtotal público porque es calculado
+    public void setSubtotal(double subtotal) { this.subtotal = subtotal; }
 
     public double getValorIva() { return valorIva; }
-    
+    public void setValorIva(double valorIva) { this.valorIva = valorIva; }
+
     public double getTotal() { return total; }
+    public void setTotal(double total) { this.total = total; }
     
     public boolean isGravaIva() { return gravaIva; }
     public void setGravaIva(boolean gravaIva) {

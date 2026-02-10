@@ -2,10 +2,7 @@ package dao;
 
 import db.Conexion;
 import model.Empleado;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,12 +31,18 @@ public class EmpleadoDAO {
         }
     }
 
-    // 2. LISTAR TODOS (Activos)
+    // 2. LISTAR TODOS (ACTIVOS E INACTIVOS)
+    // Este es el método que te faltaba y daba error
+    public List<Empleado> listarTodos() {
+        return ejecutarConsulta("SELECT * FROM AUT_EMPLEADOS ORDER BY emp_apellido");
+    }
+    
+    // Alias por compatibilidad (si algo llama a listar(), usa listarTodos)
     public List<Empleado> listar() {
-        return ejecutarConsulta("SELECT * FROM AUT_EMPLEADOS WHERE emp_estado = 'A' ORDER BY emp_apellido");
+        return listarTodos();
     }
 
-    // 3. LISTAR SOLO MECÁNICOS (Para el módulo de Citas)
+    // 3. LISTAR SOLO MECÁNICOS ACTIVOS
     public List<Empleado> listarMecanicos() {
         return ejecutarConsulta("SELECT * FROM AUT_EMPLEADOS WHERE emp_estado = 'A' AND emp_rol = 'M' ORDER BY emp_nombre");
     }
@@ -63,47 +66,91 @@ public class EmpleadoDAO {
         }
     }
 
-    // 5. ELIMINAR (Lógico)
-    public boolean eliminar(String cedula) {
+    /**
+     * 5. ELIMINAR INTELIGENTE
+     * Retorna:
+     * 1 = Eliminado Físicamente (No tenía historial).
+     * 2 = Pasado a Inactivo (Tenía historial/facturas).
+     * 0 = Error.
+     */
+    public int eliminar(String cedula) {
+        // 1. INTENTAR BORRADO FÍSICO
+        String sqlDelete = "DELETE FROM AUT_EMPLEADOS WHERE emp_cedula = ?";
+        
+        try (Connection con = Conexion.getConexion();
+             PreparedStatement ps = con.prepareStatement(sqlDelete)) {
+            
+            ps.setString(1, cedula);
+            int rows = ps.executeUpdate();
+            if (rows > 0) return 1; // ¡Se borró de la BD!
+            
+        } catch (SQLException ex) {
+            // Si el error es de integridad (código 2292 en Oracle), significa que tiene hijos (facturas/citas)
+            if (ex.getErrorCode() == 2292) {
+                return anularLogico(cedula); // Pasamos a desactivar
+            }
+            System.err.println("Error borrar físico: " + ex.getMessage());
+        }
+        return 0; // Falló
+    }
+
+    // Auxiliar: Desactivar (Update estado a 'I')
+    private int anularLogico(String cedula) {
         String sql = "UPDATE AUT_EMPLEADOS SET emp_estado = 'I' WHERE emp_cedula = ?";
         try (Connection con = Conexion.getConexion();
              PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, cedula);
-            return ps.executeUpdate() > 0;
-        } catch (SQLException ex) {
-            return false;
+            return ps.executeUpdate() > 0 ? 2 : 0; // Retorna 2 si desactivó
+        } catch (SQLException e) {
+            return 0;
         }
     }
 
     // 6. BUSCAR POR CÉDULA
     public Empleado buscarPorCedula(String cedula) {
-        List<Empleado> lista = ejecutarConsulta("SELECT * FROM AUT_EMPLEADOS WHERE emp_cedula = '" + cedula + "'");
-        return lista.isEmpty() ? null : lista.get(0);
+        String sql = "SELECT * FROM AUT_EMPLEADOS WHERE emp_cedula = ?";
+        try (Connection con = Conexion.getConexion();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, cedula);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapear(rs);
+                }
+            }
+        } catch (SQLException ex) {
+            System.err.println("Error buscar: " + ex.getMessage());
+        }
+        return null;
     }
 
-    // Auxiliar para no repetir código de lectura
+    // --- MÉTODOS PRIVADOS AUXILIARES ---
+
     private List<Empleado> ejecutarConsulta(String sql) {
         List<Empleado> lista = new ArrayList<>();
         try (Connection con = Conexion.getConexion();
              PreparedStatement ps = con.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-            
             while (rs.next()) {
-                Empleado e = new Empleado();
-                e.setId(rs.getInt("emp_id"));
-                e.setCedula(rs.getString("emp_cedula"));
-                e.setNombre(rs.getString("emp_nombre"));
-                e.setApellido(rs.getString("emp_apellido"));
-                e.setDireccion(rs.getString("emp_direccion"));
-                e.setTelefono(rs.getString("emp_telefono"));
-                e.setCorreo(rs.getString("emp_correo"));
-                e.setRol(rs.getString("emp_rol"));
-                e.setEstado(rs.getString("emp_estado"));
-                lista.add(e);
+                lista.add(mapear(rs));
             }
         } catch (SQLException ex) {
-            System.err.println("Error SQL: " + ex.getMessage());
+            System.err.println("Error SQL en ejecutarConsulta: " + ex.getMessage());
         }
         return lista;
+    }
+
+    // Convierte una fila de la BD a un objeto Empleado
+    private Empleado mapear(ResultSet rs) throws SQLException {
+        Empleado e = new Empleado();
+        e.setId(rs.getInt("emp_id"));
+        e.setCedula(rs.getString("emp_cedula"));
+        e.setNombre(rs.getString("emp_nombre"));
+        e.setApellido(rs.getString("emp_apellido"));
+        e.setDireccion(rs.getString("emp_direccion"));
+        e.setTelefono(rs.getString("emp_telefono"));
+        e.setCorreo(rs.getString("emp_correo"));
+        e.setRol(rs.getString("emp_rol"));
+        e.setEstado(rs.getString("emp_estado"));
+        return e;
     }
 }

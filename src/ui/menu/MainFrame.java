@@ -149,7 +149,7 @@ public class MainFrame extends JFrame {
         secEmpleados.setAlignmentX(Component.LEFT_ALIGNMENT);
         secEmpleados.addItem("Añadir", () -> abrirVentana(new EmpleadosFrame(UIMode.ADD)));
         secEmpleados.addItem("Editar", () -> abrirVentana(new EmpleadosFrame(UIMode.EDIT)));
-
+        secEmpleados.addItem("Eliminar", () -> abrirVentana(new EmpleadosFrame(UIMode.DELETE)));
         // USUARIOS (solo Admin)
         secUsuarios = new AccordionSection("Usuarios");
         secUsuarios.setAlignmentX(Component.LEFT_ALIGNMENT);

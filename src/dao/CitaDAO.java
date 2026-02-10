@@ -10,30 +10,36 @@ public class CitaDAO {
 
     // 1. AGENDAR CITA
     public boolean agendar(Cita c) {
+        // Usamos seq_citas.NEXTVAL. cit_cancelada por defecto es 'N'
         String sql = "INSERT INTO AUT_CITAS (cit_id, cit_fecha, cit_hora, cit_cancelada, AUT_VEHICULOS_veh_id, AUT_EMPLEADOS_emp_id) " +
                      "VALUES (seq_citas.NEXTVAL, ?, ?, 'N', ?, ?)";
         
         try (Connection con = Conexion.getConexion();
              PreparedStatement ps = con.prepareStatement(sql)) {
             
-            ps.setDate(1, c.getFecha());
+            // Convertimos java.util.Date a java.sql.Date para la fecha
+            ps.setDate(1, new java.sql.Date(c.getFecha().getTime()));
+            
+            // El Timestamp lleva la fecha y la hora combinadas
             ps.setTimestamp(2, c.getHora());
+            
             ps.setInt(3, c.getIdVehiculo());
             ps.setInt(4, c.getIdMecanico());
             
             return ps.executeUpdate() > 0;
             
         } catch (SQLException e) {
-            if (e.getErrorCode() == 1 || e.getMessage().contains("UK_CITAS_MECANICO")) {
-                System.err.println("Error: El mecánico ya tiene una cita a esa hora.");
-                return false; 
+            // Manejo del error del Trigger o Index Unique (Mecánico ocupado)
+            if (e.getErrorCode() == 20002 || e.getMessage().contains("UK_CITAS_MECANICO")) {
+                System.err.println("Error: El mecánico no está disponible o no es válido.");
+            } else {
+                System.err.println("Error al agendar: " + e.getMessage());
             }
-            System.err.println("Error al agendar: " + e.getMessage());
             return false;
         }
     }
 
-    // 2. LISTAR TODAS (Con JOINs para mostrar nombres)
+    // 2. LISTAR TODAS (Con JOINs para mostrar nombres en la tabla)
     public List<Cita> listar() {
         List<Cita> lista = new ArrayList<>();
         String sql = "SELECT ci.cit_id, ci.cit_fecha, ci.cit_hora, ci.cit_cancelada, " +
@@ -59,15 +65,17 @@ public class CitaDAO {
                 c.setFecha(rs.getDate("cit_fecha"));
                 c.setHora(rs.getTimestamp("cit_hora"));
                 
-                // Mapeo de estado: N = Activa, S = Cancelada
-                String estadoDB = rs.getString("cit_cancelada");
-                c.setEstado(estadoDB.equals("N") ? "ACTIVA" : "CANCELADA");
+                String est = rs.getString("cit_cancelada");
+                c.setEstado(est.equals("N") ? "ACTIVA" : "CANCELADA");
                 
+                // Datos visuales para la tabla (usando setters auxiliares en modelo Cita si existen, 
+                // o guardándolos para mostrarlos en la UI)
                 c.setPlaca(rs.getString("veh_placa"));
                 c.setMarcaModelo(rs.getString("mar_nombre") + " " + rs.getString("mod_nombre"));
                 c.setCliente(rs.getString("cliente"));
                 c.setNombreMecanico(rs.getString("mecanico"));
                 
+                // IDs para edición
                 c.setIdVehiculo(rs.getInt("AUT_VEHICULOS_veh_id"));
                 c.setIdMecanico(rs.getInt("AUT_EMPLEADOS_emp_id"));
                 
@@ -79,7 +87,7 @@ public class CitaDAO {
         return lista;
     }
 
-    // 3. CANCELAR (Lógico: UPDATE cit_cancelada = 'S')
+    // 3. CANCELAR (Lógico)
     public boolean cancelar(int id) {
         String sql = "UPDATE AUT_CITAS SET cit_cancelada = 'S' WHERE cit_id = ?";
         try (Connection con = Conexion.getConexion();
@@ -90,13 +98,5 @@ public class CitaDAO {
             e.printStackTrace();
             return false;
         }
-    }
-    
-    // 4. BUSCAR POR ID
-    public Cita buscarPorId(int id) {
-        // Implementación similar a listar() pero con WHERE id = ?
-        // Por brevedad, usaremos los datos de la tabla en la UI, 
-        // pero para editar correctamente deberías implementarlo.
-        return null; 
     }
 }

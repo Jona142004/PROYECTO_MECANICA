@@ -10,7 +10,7 @@ import java.util.List;
 public class FacturaDAO {
 
     // ==========================================
-    // 1. GUARDAR FACTURA (Tu código original)
+    // 1. GUARDAR FACTURA (Transaccional)
     // ==========================================
     public boolean guardarFactura(Factura f) {
         Connection con = Conexion.getConexion();
@@ -23,13 +23,14 @@ public class FacturaDAO {
         try {
             con.setAutoCommit(false); // INICIAR TRANSACCIÓN
 
-            // INSERTAR CABECERA
+            // NOTA: Asumimos que ejecutaste el script para agregar 'fac_estado' 
+            // Si no lo hiciste, borra ", fac_estado" y ", 'A'" del SQL.
             String sqlFac = "INSERT INTO AUT_FACTURAS " +
                             "(fac_id, fac_numero, fac_fecha_emision, fac_subtotal, fac_iva, fac_total, AUT_CLIENTES_cli_id, AUT_USUARIOS_usu_id, fac_estado) " +
                             "VALUES (seq_facturas.NEXTVAL, ?, ?, ?, ?, ?, ?, ?, 'A')";
             
-            // Pedimos recuperar el ID generado
-            psFactura = con.prepareStatement(sqlFac, new String[]{"fac_id"}); 
+            // Oracle: Pedimos FAC_ID en mayúsculas
+            psFactura = con.prepareStatement(sqlFac, new String[]{"FAC_ID"}); 
             
             psFactura.setString(1, f.getNumero());
             psFactura.setDate(2, f.getFecha());
@@ -42,13 +43,13 @@ public class FacturaDAO {
             int rows = psFactura.executeUpdate();
             if (rows == 0) throw new SQLException("No se guardó la cabecera.");
 
-            // RECUPERAR ID
+            // RECUPERAR ID GENERADO
             rsKeys = psFactura.getGeneratedKeys();
             int idFactura = 0;
             if (rsKeys.next()) {
                 idFactura = rsKeys.getInt(1);
             } else {
-                throw new SQLException("No se obtuvo ID factura.");
+                throw new SQLException("No se obtuvo el ID de la factura.");
             }
 
             // INSERTAR DETALLES
@@ -70,11 +71,11 @@ public class FacturaDAO {
                 psDetalle.executeUpdate();
             }
 
-            con.commit(); // CONFIRMAR
+            con.commit(); // CONFIRMAR TRANSACCIÓN
             return true;
 
         } catch (SQLException e) {
-            System.err.println("Error Guardar: " + e.getMessage());
+            e.printStackTrace(); 
             try { if (con != null) con.rollback(); } catch (SQLException ex) {}
             return false;
         } finally {
@@ -88,56 +89,81 @@ public class FacturaDAO {
     }
 
     // ==========================================
-    // 2. GENERAR NÚMERO (Tu código original)
+    // 2. GENERAR NÚMERO (Ajustado a 12 caracteres)
     // ==========================================
     public String generarNumeroFactura() {
-        String numero = "001-001-000000001";
-        String sql = "SELECT LPAD(count(*) + 1, 9, '0') FROM AUT_FACTURAS";
+        // Formato: 001-001-XXXX (Total 12 caracteres)
+        String numero = "001-001-0001"; 
+        
+        // Usamos LPAD con 4 ceros para que quepa (8 prefijo + 4 nums = 12)
+        String sql = "SELECT LPAD(count(*) + 1, 4, '0') FROM AUT_FACTURAS";
         
         try (Connection con = Conexion.getConexion();
              Statement st = con.createStatement();
              ResultSet rs = st.executeQuery(sql)) {
-            if (rs.next()) numero = "001-001-" + rs.getString(1);
+            
+            if (rs.next()) {
+                numero = "001-001-" + rs.getString(1); 
+            }
         } catch(Exception e) { e.printStackTrace(); }
         return numero;
     }
 
     // ==========================================
-    // 3. NUEVO: LISTAR FACTURAS (Para Buscar)
+    // 3. OBTENER TOTAL VENTAS (Acumulador)
     // ==========================================
-    public List<Factura> listar() {
-        List<Factura> lista = new ArrayList<>();
-        // Traemos también el nombre del cliente con un JOIN
-        String sql = "SELECT f.fac_id, f.fac_numero, f.fac_fecha_emision, f.fac_total, f.fac_estado, " +
-                     "c.cli_nombre, c.cli_apellido " +
-                     "FROM AUT_FACTURAS f " +
-                     "JOIN AUT_CLIENTES c ON f.AUT_CLIENTES_cli_id = c.cli_id " +
-                     "ORDER BY f.fac_id DESC"; // Las más recientes primero
-
+    public double obtenerTotalVentas() {
+        double total = 0;
+        // Solo sumamos las activas ('A')
+        String sql = "SELECT SUM(fac_total) FROM AUT_FACTURAS WHERE fac_estado = 'A'";
         try (Connection con = Conexion.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            
-            while(rs.next()) {
-                Factura f = new Factura();
-                f.setId(rs.getInt("fac_id"));
-                f.setNumero(rs.getString("fac_numero"));
-                f.setFecha(rs.getDate("fac_fecha_emision"));
-                f.setTotal(rs.getDouble("fac_total"));
-                // Guardamos el estado ('A'ctivo o 'I'nactivo)
-                // Nota: Asegúrate de tener el método setEstado en tu modelo Factura si quieres usarlo visualmente
-                // f.setEstado(rs.getString("fac_estado")); 
-                
-                // Usamos un truco: guardamos el nombre del cliente en una variable temporal si tu modelo no tiene campo cliente
-                // O mejor, asumimos que solo mostramos ID, Numero y Total en la tabla básica.
-                lista.add(f);
+             Statement st = con.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                total = rs.getDouble(1);
             }
         } catch (Exception e) { e.printStackTrace(); }
-        return lista;
+        return total;
     }
 
     // ==========================================
-    // 4. NUEVO: LISTAR DETALLES (Para ver la factura)
+    // 4. LISTAR ACTIVAS (Para anular)
+    // ==========================================
+    public List<Factura> listarActivas() {
+        return ejecutarConsulta("SELECT f.fac_id, f.fac_numero, f.fac_fecha_emision, f.fac_total, " +
+                                "c.cli_nombre, c.cli_apellido, f.fac_estado " +
+                                "FROM AUT_FACTURAS f " +
+                                "JOIN AUT_CLIENTES c ON f.AUT_CLIENTES_cli_id = c.cli_id " +
+                                "WHERE f.fac_estado = 'A' " +
+                                "ORDER BY f.fac_id DESC");
+    }
+
+    // ==========================================
+    // 5. LISTAR POR CLIENTE (Filtro anular)
+    // ==========================================
+    public List<Factura> listarPorCliente(int idCliente) {
+        return ejecutarConsulta("SELECT f.fac_id, f.fac_numero, f.fac_fecha_emision, f.fac_total, " +
+                                "c.cli_nombre, c.cli_apellido, f.fac_estado " +
+                                "FROM AUT_FACTURAS f " +
+                                "JOIN AUT_CLIENTES c ON f.AUT_CLIENTES_cli_id = c.cli_id " +
+                                "WHERE f.fac_estado = 'A' AND f.AUT_CLIENTES_cli_id = " + idCliente + " " +
+                                "ORDER BY f.fac_id DESC");
+    }
+
+    // ==========================================
+    // 6. ANULAR (Update estado)
+    // ==========================================
+    public boolean anular(int idFactura) {
+        String sql = "UPDATE AUT_FACTURAS SET fac_estado = 'I' WHERE fac_id = ?";
+        try (Connection con = Conexion.getConexion();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, idFactura);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
+    }
+
+    // ==========================================
+    // 7. LISTAR DETALLES (Para cargar factura)
     // ==========================================
     public List<DetalleFactura> listarDetalles(int idFactura) {
         List<DetalleFactura> lista = new ArrayList<>();
@@ -152,9 +178,7 @@ public class FacturaDAO {
             ps.setInt(1, idFactura);
             try (ResultSet rs = ps.executeQuery()) {
                 while(rs.next()) {
-                    // Convertimos 'S'/'N' a booleano
                     boolean grava = "S".equalsIgnoreCase(rs.getString("ser_iva"));
-                    
                     DetalleFactura d = new DetalleFactura(
                         rs.getInt("AUT_SERVICIOS_ser_id"),
                         rs.getString("ser_nombre"),
@@ -169,16 +193,24 @@ public class FacturaDAO {
         return lista;
     }
 
-    // ==========================================
-    // 5. NUEVO: ANULAR FACTURA
-    // ==========================================
-    public boolean anular(int idFactura) {
-        // Cambiamos estado a 'I' (Inactivo/Anulado)
-        String sql = "UPDATE AUT_FACTURAS SET fac_estado = 'I' WHERE fac_id = ?";
+    // --- AUXILIAR PRIVADO ---
+    private List<Factura> ejecutarConsulta(String sql) {
+        List<Factura> lista = new ArrayList<>();
         try (Connection con = Conexion.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, idFactura);
-            return ps.executeUpdate() > 0;
-        } catch (Exception e) { return false; }
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while(rs.next()) {
+                Factura f = new Factura();
+                f.setId(rs.getInt("fac_id"));
+                f.setNumero(rs.getString("fac_numero"));
+                f.setFecha(rs.getDate("fac_fecha_emision"));
+                f.setTotal(rs.getDouble("fac_total"));
+                // Guardamos nombre cliente en un campo auxiliar o reutilizamos uno existente para mostrar en tabla
+                // Suponemos que Factura tiene un setAuxNombreCliente o lo manejamos visualmente
+                f.setAuxNombreCliente(rs.getString("cli_nombre") + " " + rs.getString("cli_apellido"));
+                lista.add(f);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return lista;
     }
 }

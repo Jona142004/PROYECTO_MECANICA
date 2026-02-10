@@ -11,7 +11,15 @@ public class Factura {
     private double subtotal;
     private double iva;
     private double total;
-    
+    private String auxNombreCliente;
+    public String getAuxNombreCliente() {
+        return auxNombreCliente;
+    }
+
+    public void setAuxNombreCliente(String auxNombreCliente) {
+        this.auxNombreCliente = auxNombreCliente;
+    }
+
     // IDs foráneos (Relaciones con otras tablas)
     private int idCliente;
     private int idUsuario;
