@@ -30,9 +30,9 @@ public class FacturacionFrame extends JFrame {
     private JLabel lblSubtotal, lblIva, lblTotal;
     private List<DetalleFactura> detalles = new ArrayList<>();
     private int idClienteAdd = -1;
-    private JLabel lblAcumuladorVentas;
 
     // --- COMPONENTES MODO ANULAR (DELETE) ---
+    private JTextField txtBusquedaNro;
     private SelectorPanel filtroClienteAnular; // Filtro para buscar
     private JTable tableAnular;
     private DefaultTableModel modelAnular;
@@ -78,22 +78,14 @@ public class FacturacionFrame extends JFrame {
         JLabel title = new JLabel("Nueva Venta"); 
         title.setFont(new Font("SansSerif", Font.BOLD, 20));
         
-        JButton btnLimpiar = new JButton("Limpiar / Nueva");
+        JButton btnLimpiar = UITheme.primaryButton("Limpiar / Nueva");
         btnLimpiar.addActionListener(e -> cargarDatosInicialesCrear());
         
         titlePanel.add(title);
         titlePanel.add(Box.createHorizontalStrut(20));
         titlePanel.add(btnLimpiar);
 
-        // ACUMULADOR
-        lblAcumuladorVentas = new JLabel(" CARGANDO... ");
-        lblAcumuladorVentas.setFont(new Font("Monospaced", Font.BOLD, 16));
-        lblAcumuladorVentas.setForeground(new Color(0, 100, 0));
-        lblAcumuladorVentas.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1, true));
-        actualizarAcumulador();
-
         top.add(titlePanel, BorderLayout.WEST);
-        top.add(lblAcumuladorVentas, BorderLayout.EAST);
         return top;
     }
 
@@ -182,7 +174,6 @@ public class FacturacionFrame extends JFrame {
         usuario.setText(Sesion.get() != null ? Sesion.get().getNombreCompleto() : "Invitado");
         clienteAdd.setText("(Seleccionar cliente)");
         idClienteAdd = -1;
-        actualizarAcumulador();
     }
 
     private void agregarServicio() {
@@ -239,116 +230,146 @@ public class FacturacionFrame extends JFrame {
             JOptionPane.showMessageDialog(this, "Error al guardar.");
         }
     }
-    
-    private void actualizarAcumulador() {
-        double total = new FacturaDAO().obtenerTotalVentas();
-        lblAcumuladorVentas.setText(String.format(" TOTAL VENTAS HISTÓRICO: $ %.2f ", total));
-    }
 
-    // ========================================================================
-    //                          MODO 2: ANULAR FACTURA (DELETE)
+// ========================================================================
+    //                 MODO 2: BUSCAR Y ANULAR FACTURA (DELETE)
     // ========================================================================
     private void initModoAnular() {
-        add(headerAnular(), BorderLayout.NORTH);
-        add(contentAnular(), BorderLayout.CENTER);
-        cargarTablaAnular(new FacturaDAO().listarActivas());
-    }
+        // HEADER: Panel de búsqueda
+        JPanel header = new JPanel(new GridBagLayout());
+        header.setBackground(Color.WHITE);
+        header.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, UITheme.BORDER),
+            BorderFactory.createEmptyBorder(15, 15, 15, 15)
+        ));
 
-    private JPanel headerAnular() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
-        p.setBackground(Color.WHITE);
-        p.setBorder(BorderFactory.createMatteBorder(0,0,1,0, UITheme.BORDER));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(0, 5, 0, 15);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        JLabel title = new JLabel("Anulación de Facturas");
-        title.setFont(new Font("SansSerif", Font.BOLD, 18));
-        
-        p.add(title);
-        p.add(Box.createHorizontalStrut(20));
-        p.add(new JLabel("Filtrar por Cliente:"));
+        // Filtro 1: Por Número
+        gbc.gridx = 0; header.add(new JLabel("Nro. Factura:"), gbc);
+        txtBusquedaNro = new JTextField(12);
+        gbc.gridx = 1; header.add(txtBusquedaNro, gbc);
 
-        filtroClienteAnular = new SelectorPanel("(Todos los clientes)");
-        filtroClienteAnular.setPreferredSize(new Dimension(300, 30));
-        filtroClienteAnular.setOnSearch(() -> {
-            new ClienteDialog(this, res -> {
-                filtroClienteAnular.setText(res);
-                try {
-                    int idCli = Integer.parseInt(res.split(" - ")[0]);
-                    cargarTablaAnular(new FacturaDAO().listarPorCliente(idCli));
-                } catch(Exception e){}
-            }).setVisible(true);
-        });
+        // Filtro 2: Por Cliente
+        gbc.gridx = 2; header.add(new JLabel("Cliente:"), gbc);
+        filtroClienteAnular = new SelectorPanel("(Todos)");
+        filtroClienteAnular.setPreferredSize(new Dimension(250, 30));
+        filtroClienteAnular.setOnSearch(() -> abrirBuscadorClienteAnular());
+        gbc.gridx = 3; header.add(filtroClienteAnular, gbc);
 
-        JButton btnRefrescar = new JButton("Ver Todas");
+        // Botones de acción
+        JButton btnBuscar = UITheme.primaryButton("Buscar");
+        gbc.gridx = 4; header.add(btnBuscar, gbc);
+
+        JButton btnRefrescar = new JButton("Limpiar");
+        gbc.gridx = 5; header.add(btnRefrescar, gbc);
+
+        // Eventos de búsqueda
+        btnBuscar.addActionListener(e -> ejecutarBusqueda());
+        txtBusquedaNro.addActionListener(e -> ejecutarBusqueda());
         btnRefrescar.addActionListener(e -> {
-            filtroClienteAnular.setText("(Todos los clientes)");
+            txtBusquedaNro.setText("");
+            filtroClienteAnular.setText("(Todos)");
             cargarTablaAnular(new FacturaDAO().listarActivas());
         });
 
-        p.add(filtroClienteAnular);
-        p.add(btnRefrescar);
-        return p;
-    }
+        // CUERPO: Tabla y Botón de Anular
+        JPanel centerPanel = new JPanel(new BorderLayout(10, 10));
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        centerPanel.setBackground(UITheme.BG);
 
-    private JPanel contentAnular() {
-        JPanel p = new JPanel(new BorderLayout(10,10));
-        p.setBorder(BorderFactory.createEmptyBorder(10,10,10,10));
-        p.setBackground(UITheme.BG);
-
-        // Tabla simplificada para anular
         String[] cols = {"ID", "Nro Factura", "Fecha", "Cliente", "Total ($)", "Estado"};
         modelAnular = new DefaultTableModel(cols, 0) {
+            @Override
             public boolean isCellEditable(int r, int c) { return false; }
         };
         tableAnular = new JTable(modelAnular);
-        tableAnular.setRowHeight(28);
+        tableAnular.setRowHeight(30);
+        tableAnular.getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 
-        // Botón Anular
-        JButton btnAnular = new JButton("ANULAR FACTURA SELECCIONADA");
-        btnAnular.setBackground(new Color(200, 50, 50));
+        JButton btnAnular = UITheme.primaryButton("ANULAR FACTURA SELECCIONADA");
+        btnAnular.setBackground(new Color(220, 38, 38)); // Rojo fuerte
         btnAnular.setForeground(Color.WHITE);
         btnAnular.setFont(new Font("SansSerif", Font.BOLD, 14));
         btnAnular.setPreferredSize(new Dimension(0, 50));
+        btnAnular.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnAnular.addActionListener(e -> anularFacturaSeleccionada());
 
-        p.add(new JScrollPane(tableAnular), BorderLayout.CENTER);
-        p.add(btnAnular, BorderLayout.SOUTH);
-        return p;
+        centerPanel.add(new JScrollPane(tableAnular), BorderLayout.CENTER);
+        centerPanel.add(btnAnular, BorderLayout.SOUTH);
+
+        add(header, BorderLayout.NORTH);
+        add(centerPanel, BorderLayout.CENTER);
+
+        // Carga inicial
+        cargarTablaAnular(new FacturaDAO().listarActivas());
+    }
+
+    private void abrirBuscadorClienteAnular() {
+        new ClienteDialog(this, res -> {
+            filtroClienteAnular.setText(res);
+            ejecutarBusqueda(); // Buscar automáticamente al seleccionar
+        }).setVisible(true);
+    }
+
+    private void ejecutarBusqueda() {
+        String nro = txtBusquedaNro.getText().trim();
+        String cliText = filtroClienteAnular.getText();
+        FacturaDAO dao = new FacturaDAO();
+        
+        if (!nro.isEmpty()) {
+            // Prioridad búsqueda por número
+            cargarTablaAnular(dao.listarPorNumero(nro));
+        } else if (!cliText.equals("(Todos)")) {
+            // Búsqueda por ID de cliente
+            try {
+                int idCli = Integer.parseInt(cliText.split(" - ")[0]);
+                cargarTablaAnular(dao.listarPorCliente(idCli));
+            } catch (Exception e) {
+                cargarTablaAnular(dao.listarActivas());
+            }
+        } else {
+            cargarTablaAnular(dao.listarActivas());
+        }
     }
 
     private void cargarTablaAnular(List<Factura> lista) {
         modelAnular.setRowCount(0);
-        for(Factura f : lista) {
+        if (lista == null) return;
+        for (Factura f : lista) {
             modelAnular.addRow(new Object[]{
-                f.getId(), f.getNumero(), f.getFecha(), f.getAuxNombreCliente(), f.getTotal(), "ACTIVA"
+                f.getId(), 
+                f.getNumero(), 
+                f.getFecha(), 
+                f.getAuxNombreCliente(), 
+                String.format("%.2f", f.getTotal()), 
+                "ACTIVA"
             });
         }
     }
 
     private void anularFacturaSeleccionada() {
         int row = tableAnular.getSelectedRow();
-        if(row == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione una factura."); return;
+        if (row == -1) {
+            JOptionPane.showMessageDialog(this, "Debe seleccionar una factura de la tabla.");
+            return;
         }
 
-        int id = Integer.parseInt(tableAnular.getValueAt(row, 0).toString());
+        int id = (int) tableAnular.getValueAt(row, 0);
         String nro = tableAnular.getValueAt(row, 1).toString();
 
         int confirm = JOptionPane.showConfirmDialog(this, 
-            "¿Anular factura " + nro + "?", "Confirmar", JOptionPane.YES_NO_OPTION);
+            "¿Está seguro de anular la factura Nro: " + nro + "?\nEsta acción no se puede deshacer.", 
+            "Confirmar Anulación", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 
-        if(confirm == JOptionPane.YES_OPTION) {
-            if(new FacturaDAO().anular(id)) {
-                JOptionPane.showMessageDialog(this, "Factura Anulada.");
-                // Refrescar tabla actual
-                if(filtroClienteAnular.getText().contains("(Todos")) {
-                    cargarTablaAnular(new FacturaDAO().listarActivas());
-                } else {
-                    // Mantener filtro si estaba activo (re-parsear ID es complejo aqui, mejor refrescar todo o guardar ID filtro)
-                    cargarTablaAnular(new FacturaDAO().listarActivas()); 
-                    filtroClienteAnular.setText("(Todos los clientes)");
-                }
+        if (confirm == JOptionPane.YES_OPTION) {
+            if (new FacturaDAO().anular(id)) {
+                JOptionPane.showMessageDialog(this, "Factura anulada correctamente.");
+                ejecutarBusqueda(); // Refrescar con los filtros actuales
             } else {
-                JOptionPane.showMessageDialog(this, "Error al anular.");
+                JOptionPane.showMessageDialog(this, "No se pudo anular la factura.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -358,4 +379,5 @@ public class FacturacionFrame extends JFrame {
         g.gridx=0; g.gridy=y; g.weightx=0; p.add(new JLabel(l),g);
         g.gridx=1; g.weightx=1; p.add(c,g);
     }
+    
 }

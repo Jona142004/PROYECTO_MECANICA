@@ -139,18 +139,6 @@ public class FacturaDAO {
     }
 
     // ==========================================
-    // 5. LISTAR POR CLIENTE (Filtro anular)
-    // ==========================================
-    public List<Factura> listarPorCliente(int idCliente) {
-        return ejecutarConsulta("SELECT f.fac_id, f.fac_numero, f.fac_fecha_emision, f.fac_total, " +
-                                "c.cli_nombre, c.cli_apellido, f.fac_estado " +
-                                "FROM AUT_FACTURAS f " +
-                                "JOIN AUT_CLIENTES c ON f.AUT_CLIENTES_cli_id = c.cli_id " +
-                                "WHERE f.fac_estado = 'A' AND f.AUT_CLIENTES_cli_id = " + idCliente + " " +
-                                "ORDER BY f.fac_id DESC");
-    }
-
-    // ==========================================
     // 6. ANULAR (Update estado)
     // ==========================================
     public boolean anular(int idFactura) {
@@ -211,6 +199,53 @@ public class FacturaDAO {
                 lista.add(f);
             }
         } catch (Exception e) { e.printStackTrace(); }
+        return lista;
+    }
+
+    // Busca facturas activas por número parcial (ej: "001")
+    public List<Factura> listarPorNumero(String nro) {
+        String sql = "SELECT f.*, c.cli_nombre || ' ' || c.cli_apellido as cliente_nombre " +
+                    "FROM AUT_FACTURAS f " +
+                    "JOIN AUT_CLIENTES c ON f.fac_cliente_id = c.cli_id " +
+                    "f.fac_numero LIKE ? " +
+                    "ORDER BY f.fac_fecha DESC";
+        return ejecutarConsultaFacturas(sql, "%" + nro + "%");
+    }
+
+    // Busca facturas activas de un cliente específico
+    public List<Factura> listarPorCliente(int idCliente) {
+        String sql = "SELECT f.*, c.cli_nombre || ' ' || c.cli_apellido as cliente_nombre " +
+                    "FROM AUT_FACTURAS f " +
+                    "JOIN AUT_CLIENTES c ON f.fac_cliente_id = c.cli_id " +
+                    "f.fac_cliente_id = ? " +
+                    "ORDER BY f.fac_fecha DESC";
+        return ejecutarConsultaFacturas(sql, idCliente);
+    }
+
+    // Auxiliar para no repetir código de mapeo en FacturaDAO
+    private List<Factura> ejecutarConsultaFacturas(String sql, Object parametro) {
+        List<Factura> lista = new ArrayList<>();
+        try (Connection con = Conexion.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql)) {
+            
+            if (parametro instanceof String) ps.setString(1, (String) parametro);
+            else if (parametro instanceof Integer) ps.setInt(1, (Integer) parametro);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Factura f = new Factura();
+                    f.setId(rs.getInt("fac_id"));
+                    f.setNumero(rs.getString("fac_numero"));
+                    f.setFecha(rs.getDate("fac_fecha"));
+                    f.setTotal(rs.getDouble("fac_total"));
+                    // Este es el nombre que se muestra en la tabla de anulación
+                    f.setAuxNombreCliente(rs.getString("cliente_nombre")); 
+                    lista.add(f);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error en consulta de facturas: " + e.getMessage());
+        }
         return lista;
     }
 }

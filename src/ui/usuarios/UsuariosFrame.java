@@ -82,26 +82,28 @@ public class UsuariosFrame extends JFrame {
         // CONFIGURACIÓN DEL BUSCADOR DE EMPLEADO
         selEmpleado = new SelectorPanel("(Buscar Empleado)");
         selEmpleado.setOnSearch(() -> {
-            // Abrimos el buscador de empleados
+            // Abrimos el diálogo filtrando por "R" (Recepcionistas)
             new EmpleadoDialog(this, (resultado) -> {
-                // resultado suele venir como "ID - NOMBRE - CEDULA" o "NOMBRE - CEDULA"
-                // Depende de tu EmpleadoDialog. Asumiremos que devuelve algo útil.
+                // 1. Mostramos el texto en el panel
                 selEmpleado.setText(resultado);
                 
-                // Intentamos extraer la cédula para el DAO
-                // Suponiendo formato: "Nombre Apellido - 1020304050"
                 try {
+                    // 2. Dividimos la cadena: "ID - NOMBRE APELLIDO - CEDULA"
                     String[] partes = resultado.split(" - ");
-                    // Si la cédula está al final (ajusta el índice según tu EmpleadoDialog)
-                    if (partes.length >= 2) {
-                        cedulaEmpleadoSeleccionada = partes[partes.length - 1].trim(); 
+                    
+                    if (partes.length == 3) {
+                        // El formato es exacto, extraemos por índice fijo
+                        // idEmpleadoSeleccionado = Integer.parseInt(partes[0].trim()); // Si necesitas el ID
+                        cedulaEmpleadoSeleccionada = partes[2].trim();
                     } else {
-                        cedulaEmpleadoSeleccionada = resultado.trim();
-                    }
+                        // Fallback por si el formato cambia o falta alguna parte
+                        cedulaEmpleadoSeleccionada = partes[partes.length - 1].trim();
+                    }                   
                 } catch (Exception e) {
+                    System.err.println("Error al parsear selección: " + e.getMessage());
                     cedulaEmpleadoSeleccionada = "";
                 }
-            }).setVisible(true);
+            }, "R").setVisible(true);
         });
 
         txtUsuario = new JTextField();

@@ -63,7 +63,7 @@ public class ClienteDialog extends JDialog {
         // Panel Inferior
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton btnSeleccionar = UITheme.primaryButton("Seleccionar");
-        JButton btnCancelar = new JButton("Cancelar");
+        JButton btnCancelar = UITheme.primaryButton("Cancelar");
 
         btnSeleccionar.addActionListener(e -> seleccionarCliente());
         btnCancelar.addActionListener(e -> dispose());

@@ -231,7 +231,7 @@ public class ClientesFrame extends JFrame {
             setFieldsEditable(true); table.setEnabled(false); estado.setEnabled(false);
         } else if (m == UIMode.EDIT) {
             btnGuardar.setText("Guardar Cambios");
-            setFieldsEditable(false); cedula.setEditable(true); table.setEnabled(true); estado.setEnabled(true);
+            setFieldsEditable(false); cedula.setEditable(true); table.setEnabled(true); estado.setEnabled(false);
         } else {
             setFieldsEditable(false); cedula.setEditable(true); table.setEnabled(true); estado.setEnabled(false);
         }

@@ -44,7 +44,7 @@ public class EmpleadoDAO {
 
     // 3. LISTAR SOLO MECÁNICOS ACTIVOS
     public List<Empleado> listarMecanicos() {
-        return ejecutarConsulta("SELECT * FROM AUT_EMPLEADOS WHERE emp_estado = 'A' AND emp_rol = 'M' ORDER BY emp_nombre");
+        return ejecutarConsulta("SELECT * FROM AUT_EMPLEADOS WHERE emp_rol = 'M' ORDER BY emp_nombre");
     }
 
     // 4. ACTUALIZAR
@@ -123,6 +123,35 @@ public class EmpleadoDAO {
         return null;
     }
 
+   public List<Empleado> buscarPorFiltro(String texto, String rolFiltro) {
+        List<Empleado> lista = new ArrayList<>();
+        // Base de la consulta
+        String sql = "SELECT * FROM AUT_EMPLEADOS WHERE emp_estado = 'A' ";
+        
+        // Si se especifica un rol, añadimos la restricción
+        if (rolFiltro != null) {
+            sql += "AND emp_rol = '" + rolFiltro + "' ";
+        }
+        
+        sql += "AND (emp_cedula LIKE ? OR UPPER(emp_nombre) LIKE ? OR UPPER(emp_apellido) LIKE ?) " +
+            "ORDER BY emp_apellido";
+
+        try (Connection con = Conexion.getConexion();
+            PreparedStatement ps = con.prepareStatement(sql)) {
+            
+            String pattern = "%" + (texto == null ? "" : texto.toUpperCase()) + "%";
+            ps.setString(1, pattern);
+            ps.setString(2, pattern);
+            ps.setString(3, pattern);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) lista.add(mapear(rs));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error en buscador: " + e.getMessage());
+        }
+        return lista;
+    }
     // --- MÉTODOS PRIVADOS AUXILIARES ---
 
     private List<Empleado> ejecutarConsulta(String sql) {

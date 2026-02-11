@@ -14,113 +14,111 @@ import java.util.function.Consumer;
 
 public class EmpleadoDialog extends JDialog {
 
-    private Consumer<String> onSelect;
-    private DefaultTableModel model;
     private JTable table;
-    private boolean soloMecanicos; // Filtro
+    private DefaultTableModel model;
+    private JTextField txtFiltro;
+    private Consumer<String> onSelect;
+    private String filtroRol; 
 
-    // Constructor Principal (con opción de filtrar)
-    public EmpleadoDialog(Window owner, Consumer<String> onSelect, boolean soloMecanicos) {
-        super(owner, "Seleccionar Empleado", ModalityType.APPLICATION_MODAL);
+    // Constructor Principal: Este es el que deben usar Citas (con "M"), Usuarios (con "R") y Empleados (con null)
+    public EmpleadoDialog(JFrame parent, Consumer<String> onSelect, String filtroRol) {
+        super(parent, "Buscar Empleado", true);
         this.onSelect = onSelect;
-        this.soloMecanicos = soloMecanicos;
+        this.filtroRol = filtroRol;
+
+        // 1. Configuración de la ventana
+        setSize(750, 450);
+        setLocationRelativeTo(parent);
+        setLayout(new BorderLayout(10, 10));
+
+        // 2. Inicializar componentes de UI (Panel Superior)
+        JPanel top = new JPanel(new BorderLayout(5, 0));
+        top.setBorder(BorderFactory.createEmptyBorder(10, 10, 0, 10));
         
-        setSize(700, 450);
-        setLocationRelativeTo(owner);
-        setLayout(new BorderLayout());
-
-        add(header(), BorderLayout.NORTH);
-        add(content(), BorderLayout.CENTER);
+        txtFiltro = new JTextField();
+        JButton btnBuscar = UITheme.primaryButton("Buscar");
         
-        cargarTabla();
-    }
+        txtFiltro.addActionListener(e -> cargarTabla(txtFiltro.getText()));
+        btnBuscar.addActionListener(e -> cargarTabla(txtFiltro.getText()));
 
-    // Constructor por defecto (trae TODOS, para uso general)
-    public EmpleadoDialog(Window owner, Consumer<String> onSelect) {
-        this(owner, onSelect, false);
-    }
+        top.add(new JLabel("Filtrar por Cédula o Nombre: "), BorderLayout.WEST);
+        top.add(txtFiltro, BorderLayout.CENTER);
+        top.add(btnBuscar, BorderLayout.EAST);
 
-    private JPanel header() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        p.setBackground(Color.WHITE);
-        p.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        JLabel l = new JLabel(soloMecanicos ? "Seleccionar Mecánico" : "Seleccionar Empleado");
-        l.setFont(new Font("SansSerif", Font.BOLD, 14));
-        p.add(l);
-        return p;
-    }
-
-    private JPanel content() {
-        JPanel p = new JPanel(new BorderLayout());
-        p.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        p.setBackground(UITheme.BG);
-
-        String[] cols = {"ID", "Cédula", "Nombre", "Rol"};
+        // 3. Inicializar el MODELO antes de cargar la tabla para evitar el NullPointerException
+        String[] cols = {"ID", "Cédula", "Nombres", "Apellidos", "Rol"};
         model = new DefaultTableModel(cols, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
         };
         
         table = new JTable(model);
-        table.setRowHeight(24);
+        table.setRowHeight(26);
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         
-        // Doble clic para seleccionar
         table.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2) seleccionar();
+                if (e.getClickCount() == 2) seleccionarEmpleado();
             }
         });
 
-        p.add(new JScrollPane(table), BorderLayout.CENTER);
-        
-        JButton btn = UITheme.primaryButton("Seleccionar");
-        btn.addActionListener(e -> seleccionar());
-        
-        JPanel bot = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        bot.setOpaque(false);
-        bot.add(btn);
-        p.add(bot, BorderLayout.SOUTH);
+        // 4. Panel Inferior
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnSeleccionar = UITheme.primaryButton("Seleccionar");
+        JButton btnCancelar = UITheme.primaryButton("Cancelar");
 
-        return p;
+        btnSeleccionar.addActionListener(e -> seleccionarEmpleado());
+        btnCancelar.addActionListener(e -> dispose());
+
+        bottom.add(btnCancelar);
+        bottom.add(btnSeleccionar);
+
+        // 5. Agregar al Dialog
+        add(top, BorderLayout.NORTH);
+        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(bottom, BorderLayout.SOUTH);
+
+        // 6. AHORA SÍ, cargar los datos (el modelo ya no es null)
+        cargarTabla(""); 
     }
 
-    private void cargarTabla() {
+    // Constructor por compatibilidad (si lo necesitas para otros lados)
+    public EmpleadoDialog(JFrame parent, Consumer<String> onSelect) {
+        this(parent, onSelect, null);
+    }
+
+    private void cargarTabla(String filtro) {
+        // Al estar el modelo inicializado arriba, ya no dará error aquí
         model.setRowCount(0);
         EmpleadoDAO dao = new EmpleadoDAO();
-        List<Empleado> lista;
         
-        // AQUÍ ESTÁ LA MAGIA: Elegimos qué lista cargar
-        if (soloMecanicos) {
-            lista = dao.listarMecanicos(); // Solo 'M' y Activos
-        } else {
-            lista = dao.listar(); // Todos los Activos
-        }
+        // Usamos el método del DAO que adapta la búsqueda al rol recibido
+        List<Empleado> lista = dao.buscarPorFiltro(filtro, filtroRol);
 
         for (Empleado e : lista) {
-            String rol = e.getRol().equals("M") ? "Mecánico" : "Recepción";
+            String rolStr = e.getRol().equals("M") ? "Mecánico" : "Recepción";
             model.addRow(new Object[]{
-                e.getId(),
-                e.getCedula(),
-                e.getNombre() + " " + e.getApellido(),
-                rol
+                e.getId(), e.getCedula(), e.getNombre(), e.getApellido(), rolStr
             });
         }
     }
 
-    private void seleccionar() {
+    private void seleccionarEmpleado() {
         int row = table.getSelectedRow();
         if (row == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione un empleado de la lista.");
+            JOptionPane.showMessageDialog(this, "Seleccione un empleado.");
             return;
         }
-        
-        // Formato de retorno: "ID - Nombre"
+
         String id = table.getValueAt(row, 0).toString();
+        String cedula = table.getValueAt(row, 1).toString();
         String nombre = table.getValueAt(row, 2).toString();
+        String apellido = table.getValueAt(row, 3).toString();
+
+        String resultado = id + " - " + nombre + " " + apellido + " - " + cedula;
         
-        onSelect.accept(id + " - " + nombre);
+        if (onSelect != null) onSelect.accept(resultado);
         dispose();
     }
 }

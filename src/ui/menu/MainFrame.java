@@ -130,9 +130,8 @@ public class MainFrame extends JFrame {
         // FACTURACIÓN (E: solo Crear | A: + Buscar/Anular)
         secFact = new AccordionSection("Facturación");
         secFact.setAlignmentX(Component.LEFT_ALIGNMENT);
-        secFact.addItem("Crear factura", () -> abrirVentana(new FacturacionFrame()));
-        btnFacBuscar = secFact.addItem("Buscar factura", () -> abrirVentana(new FacturacionFrame()));
-        btnFacAnular = secFact.addItem("Anular factura", () -> abrirVentana(new FacturacionFrame()));
+        secFact.addItem("Crear factura", () -> abrirVentana(new FacturacionFrame(UIMode.ADD)));
+        btnFacAnular = secFact.addItem("Anular factura", () -> abrirVentana(new FacturacionFrame(UIMode.DELETE)));
 
         sidebar.add(secClientes);
         sidebar.add(secVehiculos);

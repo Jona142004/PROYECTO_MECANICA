@@ -154,15 +154,17 @@ public class VehiculoDAO {
     // 4. BUSCAR PARA EL DIÁLOGO (Por Placa o Cliente)
     public List<Vehiculo> buscarPorFiltro(String texto) {
         List<Vehiculo> lista = new ArrayList<>();
+        // Usamos el operador || para concatenar nombre, espacio y apellido en el WHERE
         String sql = "SELECT v.veh_id, v.veh_placa, m.mar_nombre, mo.mod_nombre, c.cli_nombre, c.cli_apellido " +
-                     "FROM AUT_VEHICULOS v " +
-                     "JOIN AUT_MARCAS m ON v.AUT_MARCAS_mar_id = m.mar_id " +
-                     "JOIN AUT_MODELOS mo ON v.AUT_MODELOS_mod_id = mo.mod_id " +
-                     "JOIN AUT_CLIENTES c ON v.AUT_CLIENTES_cli_id = c.cli_id " +
-                     "WHERE UPPER(v.veh_placa) LIKE ? OR UPPER(c.cli_apellido) LIKE ?";
+                    "FROM AUT_VEHICULOS v " +
+                    "JOIN AUT_MARCAS m ON v.AUT_MARCAS_mar_id = m.mar_id " +
+                    "JOIN AUT_MODELOS mo ON v.AUT_MODELOS_mod_id = mo.mod_id " +
+                    "JOIN AUT_CLIENTES c ON v.AUT_CLIENTES_cli_id = c.cli_id " +
+                    "WHERE UPPER(v.veh_placa) LIKE ? " +
+                    "OR UPPER(c.cli_nombre || ' ' || c.cli_apellido) LIKE ?";
         
         try (Connection con = Conexion.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql)) {
+            PreparedStatement ps = con.prepareStatement(sql)) {
             
             String pattern = "%" + texto.toUpperCase() + "%";
             ps.setString(1, pattern);

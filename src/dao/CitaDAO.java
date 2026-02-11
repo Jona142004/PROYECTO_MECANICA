@@ -8,36 +8,45 @@ import java.util.List;
 
 public class CitaDAO {
 
-    // 1. AGENDAR CITA
     public boolean agendar(Cita c) {
-        // Usamos seq_citas.NEXTVAL. cit_cancelada por defecto es 'N'
-        String sql = "INSERT INTO AUT_CITAS (cit_id, cit_fecha, cit_hora, cit_cancelada, AUT_VEHICULOS_veh_id, AUT_EMPLEADOS_emp_id) " +
-                     "VALUES (seq_citas.NEXTVAL, ?, ?, 'N', ?, ?)";
+    // A. VALIDACIÓN DE DISPONIBILIDAD
+    String sqlCheck = "SELECT COUNT(*) FROM AUT_CITAS " +
+                      "WHERE AUT_EMPLEADOS_emp_id = ? " +
+                      "AND cit_hora = ? " +
+                      "AND cit_cancelada = 'N'"; // Solo contamos citas activas
+
+    try (Connection con = Conexion.getConexion();
+         PreparedStatement psCheck = con.prepareStatement(sqlCheck)) {
         
-        try (Connection con = Conexion.getConexion();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            
-            // Convertimos java.util.Date a java.sql.Date para la fecha
-            ps.setDate(1, new java.sql.Date(c.getFecha().getTime()));
-            
-            // El Timestamp lleva la fecha y la hora combinadas
-            ps.setTimestamp(2, c.getHora());
-            
-            ps.setInt(3, c.getIdVehiculo());
-            ps.setInt(4, c.getIdMecanico());
-            
-            return ps.executeUpdate() > 0;
-            
-        } catch (SQLException e) {
-            // Manejo del error del Trigger o Index Unique (Mecánico ocupado)
-            if (e.getErrorCode() == 20002 || e.getMessage().contains("UK_CITAS_MECANICO")) {
-                System.err.println("Error: El mecánico no está disponible o no es válido.");
-            } else {
-                System.err.println("Error al agendar: " + e.getMessage());
+        psCheck.setInt(1, c.getIdMecanico());
+        psCheck.setTimestamp(2, c.getHora());
+        
+        try (ResultSet rs = psCheck.executeQuery()) {
+            if (rs.next() && rs.getInt(1) > 0) {
+                // Si ya existe una cita, lanzamos una excepción personalizada o manejamos el error
+                System.err.println("El mecánico ya tiene una cita agendada a esa hora.");
+                return false; 
             }
-            return false;
         }
+
+        // B. SI ESTÁ DISPONIBLE, PROCEDEMOS AL INSERT
+        String sqlInsert = "INSERT INTO AUT_CITAS (cit_id, cit_fecha, cit_hora, cit_cancelada, AUT_VEHICULOS_veh_id, AUT_EMPLEADOS_emp_id) " +
+                           "VALUES (seq_citas.NEXTVAL, ?, ?, 'N', ?, ?)";
+        
+        try (PreparedStatement psInsert = con.prepareStatement(sqlInsert)) {
+            psInsert.setDate(1, new java.sql.Date(c.getFecha().getTime()));
+            psInsert.setTimestamp(2, c.getHora());
+            psInsert.setInt(3, c.getIdVehiculo());
+            psInsert.setInt(4, c.getIdMecanico());
+            
+            return psInsert.executeUpdate() > 0;
+        }
+
+    } catch (SQLException e) {
+        System.err.println("Error en CitaDAO: " + e.getMessage());
+        return false;
     }
+}
 
     // 2. LISTAR TODAS (Con JOINs para mostrar nombres en la tabla)
     public List<Cita> listar() {

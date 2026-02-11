@@ -46,7 +46,8 @@ public class EmpleadosFrame extends JFrame {
         this(UIMode.ADD);
     }
 
-    private JPanel content() {
+private JPanel content() {
+
         JPanel root = new JPanel(new BorderLayout());
         root.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
         root.setBackground(UITheme.BG);
@@ -83,31 +84,31 @@ public class EmpleadosFrame extends JFrame {
         btnGuardar = UITheme.primaryButton("Guardar");
         btnEliminar = UITheme.primaryButton("Eliminar");
         btnLimpiar = UITheme.primaryButton("Limpiar");
-        
-        actions.add(btnBuscar); actions.add(btnGuardar); actions.add(btnEliminar); actions.add(btnLimpiar);
 
+        actions.add(btnBuscar); actions.add(btnGuardar); actions.add(btnEliminar); actions.add(btnLimpiar);
         g.gridx = 0; g.gridy = r; g.gridwidth = 2;
         form.add(actions, g);
 
         // TABLA: AÑADIDA COLUMNA DIRECCIÓN
         JPanel tableCard = UITheme.cardPanel();
         tableCard.setLayout(new BorderLayout());
+
         // Definimos las columnas exactas
         String[] cols = {"Cédula", "Nombres", "Apellidos", "Dirección", "Rol", "Teléfono", "Correo", "Estado"};
-        
+
         model = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         table = new JTable(model);
         table.setRowHeight(26);
-        
+
         // Listener de selección
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && table.getSelectedRow() != -1) {
                 onTableSelect();
             }
         });
-        
+
         tableCard.add(new JScrollPane(table), BorderLayout.CENTER);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, form, tableCard);
@@ -121,7 +122,8 @@ public class EmpleadosFrame extends JFrame {
         btnLimpiar.addActionListener(e -> limpiarCampos());
 
         return root;
-    }
+
+    } 
 
     // --- LÓGICA DE NEGOCIO ---
 
@@ -219,11 +221,11 @@ public class EmpleadosFrame extends JFrame {
         
         // Si ya está inactivo, avisamos
         if ("I".equals(estadoActualSeleccionado) || "INACTIVO".equals(estado.getSelectedItem())) {
-            JOptionPane.showMessageDialog(this, "El empleado ya es histórico (Inactivo).\nNo se puede borrar de la BD.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "El empleado tiene facturas registradas.\nNo se puede borrar de la BD.", "Aviso", JOptionPane.WARNING_MESSAGE);
             return;
         }
         
-        int confirm = JOptionPane.showConfirmDialog(this, "¿Eliminar empleado?\nSi tiene historial, pasará a INACTIVO.", "Confirmar", JOptionPane.YES_NO_OPTION);
+        int confirm = JOptionPane.showConfirmDialog(this, "¿Eliminar empleado?\n", "Confirmar", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
             EmpleadoDAO dao = new EmpleadoDAO();
             

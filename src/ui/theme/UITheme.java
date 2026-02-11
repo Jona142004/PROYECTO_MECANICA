@@ -45,22 +45,6 @@ public class UITheme {
         return b;
     }
 
-    public static JButton ghostButton(String text) {
-        JButton b = new JButton(text);
-
-        b.setFocusPainted(false);
-        b.setContentAreaFilled(true);       // para que el blanco se pinte bien
-        b.setOpaque(true);
-
-        b.setForeground(TEXT);
-        b.setBackground(Color.gray);
-
-        b.setBorder(BorderFactory.createLineBorder(BORDER));
-        b.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        return b;
-    }
-
 
     public static JPanel cardPanel() {
         JPanel p = new JPanel();
